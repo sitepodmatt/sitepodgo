@@ -1,0 +1,7 @@
+metadata:
+  name: serviceinstance.stable.sitepod.io
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+description: "A resource to represent a container providing a service"
+versions:
+- name: v1

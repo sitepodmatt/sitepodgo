@@ -1,0 +1,6 @@
+metadata:
+  generateName: sitepod-acme-
+apiVersion: stable.sitepod.io/v1
+kind: Sitepod
+spec:
+  displayName: "Acme web store"

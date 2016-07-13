@@ -1,0 +1,12 @@
+metadata:
+  name: systemuser-matt
+  labels:
+    sitepod: "fdf5af43-4053-11e6-8410-98eecb292b22"
+apiVersion: stable.sitepod.io/v1
+kind: SystemUser
+spec:
+  hashedPassword:
+    salt: "6fosNctc"
+    scheme: sha1
+    combinedHash: "KHUonvrrXIF6SO/cbaReVEMNseniTsRXjghgjv6pETi1014APkTVNn2GfK8IAcgobxHjl4ac0v8ZR461V7eqA0"
+    rounds: 5000

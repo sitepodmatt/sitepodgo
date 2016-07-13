@@ -1,0 +1,7 @@
+metadata:
+  name: cluster.stable.sitepod.io
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+description: "A simple resource to represent a cluster of sitepod resources"
+versions:
+- name: v1

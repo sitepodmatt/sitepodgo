@@ -1,0 +1,9 @@
+metadata:
+  generateName: "sitepod-ssh-"
+  labels:
+    sitepod: "0000-0000"
+apiVersion: stable.sitepod.io/v1
+kind: Serviceinstance
+spec:
+ type: "ssh"
+ displayName: "SSH Instance"

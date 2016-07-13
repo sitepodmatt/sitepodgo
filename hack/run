@@ -1,0 +1,5 @@
+#!/bin/zsh
+
+cd cmd/sitepod-cm 
+exec ./sitepod-cm run --v=4
+
