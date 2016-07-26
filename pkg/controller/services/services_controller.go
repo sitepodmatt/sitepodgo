@@ -4,7 +4,6 @@ package services
 
 import (
 	"bytes"
-	"fmt"
 	"text/template"
 	"time"
 
@@ -231,14 +230,15 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 		publicKey := privateKey.PublicKey
 
 		pub, err := ssh.NewPublicKey(&publicKey)
+
 		if err != nil {
 			panic(err)
 		}
-		pubBytes := ssh.MarshalAuthorizedKey(pub)
-		pubKeyOutput := fmt.Sprintf("%s %s %s", "ssh-rsa", base64.StdEncoding.EncodeToString(pubBytes), "sitepod")
+
+		pkBytes := pub.Marshal()
 
 		service.Spec.PrivateKeyPEM = privateKeyPem
-		service.Spec.PublicKeyPEM = pubKeyOutput
+		service.Spec.PublicKeyPEM = base64.StdEncoding.EncodeToString(pkBytes)
 
 	}
 
@@ -279,11 +279,19 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 			continue
 		}
 
+		skipMount := false
 		for _, vm := range sshContainer.VolumeMounts {
 			if vm.Name == configMap.Name {
+				skipMount = true
 				break
 			}
 		}
+
+		if skipMount {
+			continue
+		}
+
+		//TODONOW FIX THIS
 		sshContainer.VolumeMounts = append(sshContainer.VolumeMounts,
 			k8s_api.VolumeMount{
 				Name:      configMap.Name,
@@ -374,9 +382,11 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 	)
 
 	if isNew {
+		//TODONOW test if exist
 		rootDeployment.Spec.Template.Spec.Containers = append(rootDeployment.Spec.Template.Spec.Containers, *sshContainer)
 	}
 
+	//TODONOW: FIX
 	glog.Infof("Updating deployment %s", rootDeployment.Name)
 	_, err = c.deploymentUpdater(rootDeployment)
 	if err != nil {
