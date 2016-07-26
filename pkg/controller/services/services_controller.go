@@ -194,8 +194,8 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 		isNew = true
 		sshContainer = &k8s_api.Container{}
 	}
-	rootPerm := int64(104)
-	rootDeployment.Spec.Template.Spec.SecurityContext.FSGroup = &rootPerm
+	//rootPerm := int64(104)
+	//rootDeployment.Spec.Template.Spec.SecurityContext.FSGroup = &rootPerm
 	image := service.Spec.Image
 	version := service.Spec.ImageVersion
 	if image == "" {
