@@ -4,6 +4,7 @@ package services
 
 import (
 	"bytes"
+	"fmt"
 	"text/template"
 	"time"
 
@@ -207,8 +208,8 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 	sshContainer.Image = image + ":" + version
 	sshContainer.ImagePullPolicy = k8s_api.PullAlways
 
-	sshContainer.Command = []string{"/bin/bash"}
-	sshContainer.Args = []string{"-c", "sleep 100d"}
+	//sshContainer.Command = []string{"/bin/bash"}
+	//sshContainer.Args = []string{"-c", "sleep 100d"}
 
 	sshContainer.Name = "sitepod-ssh"
 
@@ -238,8 +239,7 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 		pkBytes := pub.Marshal()
 
 		service.Spec.PrivateKeyPEM = privateKeyPem
-		service.Spec.PublicKeyPEM = base64.StdEncoding.EncodeToString(pkBytes)
-
+		service.Spec.PublicKeyPEM = fmt.Sprintf("ssh-rsa %s %s", base64.StdEncoding.EncodeToString(pkBytes), "placeholder@sitepod.io")
 	}
 
 	rootStorageObj, err := c.pvInformer.GetIndexer().ByIndex("sitepod", sitepodKey)
