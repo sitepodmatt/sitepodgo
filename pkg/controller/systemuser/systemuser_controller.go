@@ -203,6 +203,7 @@ func (c *SystemUserController) syncSystemUser(key string) {
 		pv := pvObjs[0].(*k8s_api.PersistentVolume)
 
 		if pv.Annotations["must-provision"] == "true" {
+			time.Sleep(200 * time.Millisecond)
 			glog.Errorf("Underlying persistent volume not yet ready")
 			c.queue.Add(key)
 			return
