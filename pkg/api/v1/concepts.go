@@ -157,7 +157,7 @@ func newConceptFuncs(rc *restclient.RESTClient, scheme *runtime.Scheme, kind str
 			return nil, err
 		}
 		uid := accessor.GetUID()
-		glog.Errorf("Updating %s", string(uid))
+		glog.Infof("Updating %s", string(uid))
 		if len(string(uid)) > 0 {
 			rName := accessor.GetName()
 			rObj, err = funcs.Put().Name(rName).Body(rObj).Do().Get()

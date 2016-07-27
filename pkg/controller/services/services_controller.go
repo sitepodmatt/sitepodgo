@@ -256,12 +256,23 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 
 	rootStorage := rootStorageObj[0].(*k8s_api.PersistentVolume)
 
-	sshContainer.VolumeMounts = []k8s_api.VolumeMount{
-		k8s_api.VolumeMount{
+	//FIX this
+	homeMounted := false
+	glog.Infof("DEBUGX: %d", len(sshContainer.VolumeMounts))
+	for _, vm := range sshContainer.VolumeMounts {
+		glog.Infof("DEBUGX: %s", vm.Name)
+		if vm.Name == "home-storage" {
+			homeMounted = true
+			break
+		}
+	}
+
+	if !homeMounted {
+		sshContainer.VolumeMounts = append(sshContainer.VolumeMounts, k8s_api.VolumeMount{
 			MountPath: "/home",
 			Name:      "home-storage",
 			//SubPath:   "home", //TODO this isn't working?  Kubernetes issue 26986
-		},
+		})
 	}
 
 	//TODO use label selector
@@ -290,6 +301,8 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 		if skipMount {
 			continue
 		}
+
+		glog.Infof("Config map not found so adding")
 
 		//TODONOW FIX THIS
 		sshContainer.VolumeMounts = append(sshContainer.VolumeMounts,
@@ -357,29 +370,49 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 			MountPath: "/etc/sitepod/ssh",
 		})
 
-	rootDeployment.Spec.Template.Spec.Volumes = append(rootDeployment.Spec.Template.Spec.Volumes,
-		k8s_api.Volume{
-			Name: "ssh-configmap-volume",
-			VolumeSource: k8s_api.VolumeSource{
-				ConfigMap: &k8s_api.ConfigMapVolumeSource{
-					k8s_api.LocalObjectReference{sshConfigMapName},
-					[]k8s_api.KeyToPath{
-						k8s_api.KeyToPath{"sshdconfig", "sshd_config"},
-						k8s_api.KeyToPath{"sshhostrsakey", "ssh_host_rsa_key"},
-						k8s_api.KeyToPath{"sshhostrsakeypub", "ssh_host_rsa_key.pub"},
-					}},
-			},
-		},
-		//TODO: This is a hack, use claims and properly utilize PersistenntVolumes
-		k8s_api.Volume{
-			Name: "home-storage",
-			VolumeSource: k8s_api.VolumeSource{
-				HostPath: &k8s_api.HostPathVolumeSource{
-					Path: rootStorage.Spec.HostPath.Path + "/home",
+	configMapVolumeInPod := false
+	for _, sv := range rootDeployment.Spec.Template.Spec.Volumes {
+		if sv.Name == "ssh-configmap-volume" {
+			configMapVolumeInPod = true
+			break
+		}
+	}
+
+	if !configMapVolumeInPod {
+		rootDeployment.Spec.Template.Spec.Volumes = append(rootDeployment.Spec.Template.Spec.Volumes,
+			k8s_api.Volume{
+				Name: "ssh-configmap-volume",
+				VolumeSource: k8s_api.VolumeSource{
+					ConfigMap: &k8s_api.ConfigMapVolumeSource{
+						k8s_api.LocalObjectReference{sshConfigMapName},
+						[]k8s_api.KeyToPath{
+							k8s_api.KeyToPath{"sshdconfig", "sshd_config"},
+							k8s_api.KeyToPath{"sshhostrsakey", "ssh_host_rsa_key"},
+							k8s_api.KeyToPath{"sshhostrsakeypub", "ssh_host_rsa_key.pub"},
+						}},
 				},
-			},
-		},
-	)
+			})
+	}
+
+	homeStorageVolumeInPod := false
+	for _, sv := range rootDeployment.Spec.Template.Spec.Volumes {
+		if sv.Name == "home-storage" {
+			homeStorageVolumeInPod = true
+			break
+		}
+	}
+
+	if !homeStorageVolumeInPod {
+		rootDeployment.Spec.Template.Spec.Volumes = append(rootDeployment.Spec.Template.Spec.Volumes,
+			k8s_api.Volume{
+				Name: "home-storage",
+				VolumeSource: k8s_api.VolumeSource{
+					HostPath: &k8s_api.HostPathVolumeSource{
+						Path: rootStorage.Spec.HostPath.Path + "/home",
+					},
+				},
+			})
+	}
 
 	if isNew {
 		//TODONOW test if exist
@@ -390,7 +423,7 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 	glog.Infof("Updating deployment %s", rootDeployment.Name)
 	_, err = c.deploymentUpdater(rootDeployment)
 	if err != nil {
-		glog.Errorf("Unable to update rc %s: %s", rootDeployment.Name, err)
+		glog.Errorf("Unable to update deployment %s: %s", rootDeployment.Name, err)
 		return
 	}
 
