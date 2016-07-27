@@ -146,6 +146,7 @@ func (c *SitepodController) syncSitepod(key string) {
 				if err != nil {
 					glog.Errorf("Unable to set replicates to 0 on deployment: %+v", err)
 				}
+				time.Sleep(200 * time.Millisecond)
 				c.queue.Add(key)
 				return
 			} else {

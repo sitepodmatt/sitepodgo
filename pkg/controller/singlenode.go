@@ -75,7 +75,7 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 				panic("Unable to register cluster, did you create the TPRS?")
 			}
 		} else {
-			glog.Errorf("Unable to start: %+v", err)
+			glog.Errorf("Unable to start: is API server running?: %+v", err)
 			return
 		}
 	}
