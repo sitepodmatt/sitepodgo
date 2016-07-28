@@ -238,7 +238,9 @@ func (c *SitepodController) syncSitepod(key string) {
 	_, err = c.deploymentUpdater(deployment)
 
 	if err != nil {
-		glog.Errorf("Error adding/updating deployment for sitepod %s: %s", sitepodName, err)
+		glog.Errorf("Requeue - Error adding/updating deployment for sitepod %s: %s", sitepodName, err)
+		time.Sleep(200 * time.Millisecond)
+		c.queue.Add(key)
 		return
 	}
 
@@ -278,6 +280,8 @@ func (c *SitepodController) syncSitepod(key string) {
 	pvObj, err := c.pvUpdater(pv)
 	if err != nil {
 		glog.Errorf("Error adding/updating new PV for sitepod %s: %s", sitepodName, err)
+		time.Sleep(200 * time.Millisecond)
+		c.queue.Add(key)
 		return
 	}
 	pv = pvObj.(*k8s_api.PersistentVolume)
@@ -302,6 +306,8 @@ func (c *SitepodController) syncSitepod(key string) {
 		_, err = c.pvUpdater(pv)
 		if err != nil {
 			glog.Errorf("Error adding/updating new PV for sitepod %s: %s", sitepodName, err)
+			time.Sleep(200 * time.Millisecond)
+			c.queue.Add(key)
 			return
 		}
 	}
