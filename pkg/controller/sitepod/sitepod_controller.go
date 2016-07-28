@@ -153,7 +153,7 @@ func (c *SitepodController) syncSitepod(key string) {
 	}
 
 	if len(sitepodObjs) == 0 {
-		glog.Infof("Presuming sitepod %s has been deleted", key)
+		glog.Infof("Presuming sitepod %s has been deleted, skipping.", key)
 		return
 	}
 
@@ -335,6 +335,7 @@ func (c *SitepodController) deleteSitepod(key string) {
 		}
 
 	}
+
 }
 
 func (c *SitepodController) HasSynced() bool {
