@@ -21,6 +21,10 @@ import (
 	"sitepod.io/sitepod/pkg/api/v1"
 )
 
+var (
+	RetryDelay time.Duration = 200 * time.Millisecond
+)
+
 type SitepodController struct {
 	sitepodInformer    framework.SharedIndexInformer
 	pvInformer         framework.SharedIndexInformer
@@ -112,7 +116,7 @@ func (c *SitepodController) worker() {
 
 	for !c.IsReady() {
 		glog.Info("Waiting for dependencies to be ready")
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(RetryDelay)
 	}
 
 	for {
@@ -207,8 +211,7 @@ func (c *SitepodController) syncSitepod(key string) {
 
 	if err != nil {
 		glog.Errorf("Requeue - Error adding/updating deployment for sitepod %s: %s", sitepodName, err)
-		time.Sleep(200 * time.Millisecond)
-		c.queue.Add(key)
+		c.queue.AddAfter(key, RetryDelay)
 		return
 	}
 
@@ -248,8 +251,7 @@ func (c *SitepodController) syncSitepod(key string) {
 	pvObj, err := c.pvUpdater(pv)
 	if err != nil {
 		glog.Errorf("Error adding/updating new PV for sitepod %s: %s", sitepodName, err)
-		time.Sleep(200 * time.Millisecond)
-		c.queue.Add(key)
+		c.queue.AddAfter(key, RetryDelay)
 		return
 	}
 	pv = pvObj.(*k8s_api.PersistentVolume)
@@ -274,8 +276,7 @@ func (c *SitepodController) syncSitepod(key string) {
 		_, err = c.pvUpdater(pv)
 		if err != nil {
 			glog.Errorf("Error adding/updating new PV for sitepod %s: %s", sitepodName, err)
-			time.Sleep(200 * time.Millisecond)
-			c.queue.Add(key)
+			c.queue.AddAfter(key, RetryDelay)
 			return
 		}
 	}
