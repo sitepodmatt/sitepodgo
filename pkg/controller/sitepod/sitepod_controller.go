@@ -32,7 +32,7 @@ type SitepodController struct {
 	deploymentDeleter  v1.DeleterFunc
 	rsFilter           v1.ListLabelFunc
 	rsDeleter          v1.DeleterFunc
-	queue              workqueue.Interface
+	queue              workqueue.DelayingInterface
 }
 
 func NewSitepodController(sitepodInformer framework.SharedIndexInformer,
@@ -56,15 +56,23 @@ func NewSitepodController(sitepodInformer framework.SharedIndexInformer,
 		deploymentDeleter,
 		rsFilter,
 		rsDeleter,
-		workqueue.New(),
+		workqueue.NewDelayingQueue(),
 	}
 
 	sitepodInformer.AddEventHandler(framework.ResourceEventHandlerFuncs{
-		AddFunc:    c.addSitepod,
-		UpdateFunc: c.updateSitepod,
-		DeleteFunc: c.deleteSitepod})
+		AddFunc:    c.queueAddSitepod,
+		UpdateFunc: c.queueUpdateSitepod,
+		DeleteFunc: c.queueDeleteSitepod})
 
 	return c
+}
+
+type processSitepodRequest struct {
+	id string
+}
+
+type deleteSitepodRequest struct {
+	id string
 }
 
 var workQueueKeyFunc func(interface{}) (string, error) = uidKeyFunc
@@ -74,24 +82,24 @@ func uidKeyFunc(obj interface{}) (string, error) {
 	return string(sitepod.UID), nil
 }
 
-func (c *SitepodController) addSitepod(obj interface{}) {
+func (c *SitepodController) queueAddSitepod(obj interface{}) {
 	sitepod := obj.(*v1.Sitepod)
 	key, _ := workQueueKeyFunc(sitepod)
-	c.queue.Add(key)
+	c.queue.Add(processSitepodRequest{key})
 }
 
-func (c *SitepodController) updateSitepod(old interface{}, cur interface{}) {
+func (c *SitepodController) queueUpdateSitepod(old interface{}, cur interface{}) {
 	if k8s_api.Semantic.DeepEqual(old, cur) {
 		return
 	}
 	sitepod := cur.(*v1.Sitepod)
 	key, _ := workQueueKeyFunc(sitepod)
-	c.queue.Add(key)
+	c.queue.Add(processSitepodRequest{key})
 }
 
-func (c *SitepodController) deleteSitepod(obj interface{}) {
+func (c *SitepodController) queueDeleteSitepod(obj interface{}) {
 	key, _ := workQueueKeyFunc(obj)
-	c.queue.Add(key)
+	c.queue.Add(deleteSitepodRequest{key})
 }
 
 func (c *SitepodController) Run(stopCh <-chan struct{}) {
@@ -101,14 +109,28 @@ func (c *SitepodController) Run(stopCh <-chan struct{}) {
 }
 
 func (c *SitepodController) worker() {
+
+	for !c.IsReady() {
+		glog.Info("Waiting for dependencies to be ready")
+		time.Sleep(50 * time.Millisecond)
+	}
+
 	for {
 		func() {
-			key, quit := c.queue.Get()
+			item, quit := c.queue.Get()
 			if quit {
 				return
 			}
-			defer c.queue.Done(key)
-			c.syncSitepod(key.(string))
+			defer c.queue.Done(item)
+
+			if key, ok := item.(processSitepodRequest); ok {
+				c.syncSitepod(key.id)
+			}
+
+			if key, ok := item.(deleteSitepodRequest); ok {
+				c.deleteSitepod(key.id)
+			}
+
 		}()
 	}
 }
@@ -119,69 +141,15 @@ func (c *SitepodController) IsReady() bool {
 
 func (c *SitepodController) syncSitepod(key string) {
 
-	for !c.IsReady() {
-		glog.Info("Waiting for deployment informer and pv informer to sync")
-		time.Sleep(50 * time.Millisecond)
-	}
-
 	sitepodObjs, err := c.sitepodInformer.GetIndexer().ByIndex("uid", key)
 
 	if err != nil {
-		glog.Errorf("Unable to get sitepod: %+v", err)
+		glog.Errorf("Unable to get sitepod %s: %+v", key, err)
 		return
 	}
 
 	if len(sitepodObjs) == 0 {
-		glog.Errorf("Sitepod %s not longer found in store - perhaps deleted? clean up deployments", key)
-		deploymentObjs, err := c.deploymentInformer.GetIndexer().ByIndex("sitepod", key)
-
-		for _, deploymentObj := range deploymentObjs {
-			doneDeployment := deploymentObj.(*ext_api.Deployment)
-			//err = c.deploymentDeleter(doneDeployment)
-			glog.Infof("Deleting deployment %s", doneDeployment.Name)
-			if doneDeployment.Spec.Replicas != 0 {
-				glog.Infof("Setting replicas to 0 for %s", doneDeployment.Name)
-				doneDeployment.Spec.Replicas = 0
-				_, err = c.deploymentUpdater(doneDeployment)
-				if err != nil {
-					glog.Errorf("Unable to set replicates to 0 on deployment: %+v", err)
-				}
-				time.Sleep(200 * time.Millisecond)
-				c.queue.Add(key)
-				return
-			} else {
-				if doneDeployment.Status.Replicas != 0 {
-					// TODO use delayed workqueue
-					glog.Infof("Replicates not yet 0")
-					time.Sleep(200 * time.Millisecond)
-					c.queue.Add(key)
-				} else {
-					glog.Infof("Replicates now yet 0")
-
-					err := c.deploymentDeleter(doneDeployment)
-					if err != nil {
-						glog.Errorf("Unable to delete deployment")
-						return
-					}
-
-					selector, err := unversioned.LabelSelectorAsSelector(doneDeployment.Spec.Selector)
-					//c.rsSet(labels.Newre
-					rsObjs, err := c.rsFilter(selector)
-					if err != nil {
-						glog.Errorf("Unable to get replica sets %v", err)
-						return
-					}
-
-					rsList := rsObjs.(*ext_api.ReplicaSetList)
-					for _, rsObj := range rsList.Items {
-						c.rsDeleter(&rsObj)
-					}
-
-				}
-			}
-
-		}
-
+		glog.Infof("Presuming sitepod %s has been deleted", key)
 		return
 	}
 
@@ -314,6 +282,58 @@ func (c *SitepodController) syncSitepod(key string) {
 
 	glog.Infof("Provisioned PV %s", pv.Name)
 
+}
+
+func (c *SitepodController) deleteSitepod(key string) {
+
+	deploymentObjs, err := c.deploymentInformer.GetIndexer().ByIndex("sitepod", key)
+
+	for _, deploymentObj := range deploymentObjs {
+		doneDeployment := deploymentObj.(*ext_api.Deployment)
+		//err = c.deploymentDeleter(doneDeployment)
+		glog.Infof("Deleting deployment %s", doneDeployment.Name)
+		if doneDeployment.Spec.Replicas != 0 {
+			glog.Infof("Setting replicas to 0 for %s", doneDeployment.Name)
+			doneDeployment.Spec.Replicas = 0
+			_, err = c.deploymentUpdater(doneDeployment)
+			if err != nil {
+				glog.Errorf("Unable to set replicates to 0 on deployment: %+v", err)
+			}
+			time.Sleep(200 * time.Millisecond)
+			c.queue.Add(key)
+			return
+		} else {
+			if doneDeployment.Status.Replicas != 0 {
+				// TODO use delayed workqueue
+				glog.Infof("Replicates not yet 0")
+				time.Sleep(200 * time.Millisecond)
+				c.queue.Add(key)
+			} else {
+				glog.Infof("Replicates now yet 0")
+
+				err := c.deploymentDeleter(doneDeployment)
+				if err != nil {
+					glog.Errorf("Unable to delete deployment")
+					return
+				}
+
+				selector, err := unversioned.LabelSelectorAsSelector(doneDeployment.Spec.Selector)
+				//c.rsSet(labels.Newre
+				rsObjs, err := c.rsFilter(selector)
+				if err != nil {
+					glog.Errorf("Unable to get replica sets %v", err)
+					return
+				}
+
+				rsList := rsObjs.(*ext_api.ReplicaSetList)
+				for _, rsObj := range rsList.Items {
+					c.rsDeleter(&rsObj)
+				}
+
+			}
+		}
+
+	}
 }
 
 func (c *SitepodController) HasSynced() bool {
