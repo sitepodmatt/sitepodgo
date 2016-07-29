@@ -109,6 +109,7 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 		c.extConcepts.Deployments.Deleter,
 		c.extConcepts.ReplicaSets.GetWithLabels,
 		c.extConcepts.ReplicaSets.Deleter,
+		c.concepts.RestClient,
 	)
 	go c.sitepodController.Run(stopCh)
 

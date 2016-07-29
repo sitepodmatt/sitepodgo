@@ -16,7 +16,10 @@ import (
 	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 	"sitepod.io/sitepod/pkg/api/v1"
 )
@@ -37,6 +40,7 @@ type SitepodController struct {
 	rsFilter           v1.ListLabelFunc
 	rsDeleter          v1.DeleterFunc
 	queue              workqueue.DelayingInterface
+	rc                 *restclient.RESTClient
 }
 
 func NewSitepodController(sitepodInformer framework.SharedIndexInformer,
@@ -48,7 +52,8 @@ func NewSitepodController(sitepodInformer framework.SharedIndexInformer,
 	deploymentUpdater v1.UpdaterFunc,
 	deploymentDeleter v1.DeleterFunc,
 	rsFilter v1.ListLabelFunc,
-	rsDeleter v1.DeleterFunc) framework.ControllerInterface {
+	rsDeleter v1.DeleterFunc,
+	rc *restclient.RESTClient) framework.ControllerInterface {
 
 	c := &SitepodController{sitepodInformer,
 		pvInformer,
@@ -61,6 +66,7 @@ func NewSitepodController(sitepodInformer framework.SharedIndexInformer,
 		rsFilter,
 		rsDeleter,
 		workqueue.NewDelayingQueue(),
+		rc,
 	}
 
 	sitepodInformer.AddEventHandler(framework.ResourceEventHandlerFuncs{
@@ -300,15 +306,13 @@ func (c *SitepodController) deleteSitepod(key string) {
 			if err != nil {
 				glog.Errorf("Unable to set replicates to 0 on deployment: %+v", err)
 			}
-			time.Sleep(200 * time.Millisecond)
-			c.queue.Add(key)
+			c.queue.AddAfter(deleteSitepodRequest{key}, RetryDelay)
 			return
 		} else {
 			if doneDeployment.Status.Replicas != 0 {
 				// TODO use delayed workqueue
 				glog.Infof("Replicates not yet 0")
-				time.Sleep(200 * time.Millisecond)
-				c.queue.Add(key)
+				c.queue.AddAfter(deleteSitepodRequest{key}, RetryDelay)
 			} else {
 				glog.Infof("Replicates now yet 0")
 
@@ -335,7 +339,19 @@ func (c *SitepodController) deleteSitepod(key string) {
 		}
 
 	}
+	glog.Infof("Deleteing related system users")
+	req, err := labels.NewRequirement("sitepod", labels.EqualsOperator, sets.NewString(key))
+	if err != nil {
+		panic(err)
+	}
+	sitepodMatcher := labels.NewSelector().Add(*req)
+	//TODO: this needs to be wrapped away
+	res := c.rc.Delete().Resource("systemusers").Namespace("default").LabelsSelectorParam(sitepodMatcher).Do()
 
+	if err = res.Error(); err != nil {
+		glog.Errorf("Unable to delete system users: %+v", err)
+		c.queue.AddAfter(key, RetryDelay)
+	}
 }
 
 func (c *SitepodController) HasSynced() bool {

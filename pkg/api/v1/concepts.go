@@ -38,6 +38,7 @@ type Concepts struct {
 	Sitepods    *ConceptFuncs
 	Services    *ConceptFuncs
 	Clusters    *ConceptFuncs
+	RestClient  *restclient.RESTClient
 }
 
 type CoreConcepts struct {
@@ -62,6 +63,7 @@ func BuildConceptClients(rc func() *restclient.RESTClient, scheme *runtime.Schem
 		Counters:    newConceptFuncs(rc(), scheme, "Counter", "Counters", ns),
 		Sitepods:    newConceptFuncs(rc(), scheme, "Sitepod", "Sitepods", ns),
 		Services:    newConceptFuncs(rc(), scheme, "Serviceinstance", "Serviceinstances", ns),
+		RestClient:  rc(),
 	}
 
 	return c
