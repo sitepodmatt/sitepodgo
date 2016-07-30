@@ -6,6 +6,7 @@ package sitepod
 // and then removes the deployment and related replica sets.
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"time"
@@ -133,12 +134,13 @@ func (c *SitepodController) worker() {
 			}
 			defer c.queue.Done(item)
 
-			if key, ok := item.(processSitepodRequest); ok {
-				c.syncSitepod(key.id)
-			}
-
-			if key, ok := item.(deleteSitepodRequest); ok {
-				c.deleteSitepod(key.id)
+			switch item.(type) {
+			case processSitepodRequest:
+				c.syncSitepod(item.(processSitepodRequest).id)
+			case deleteSitepodRequest:
+				c.deleteSitepod(item.(deleteSitepodRequest).id)
+			default:
+				panic(fmt.Sprintf("Unknown type queued: %+v", item))
 			}
 
 		}()
@@ -217,7 +219,7 @@ func (c *SitepodController) syncSitepod(key string) {
 
 	if err != nil {
 		glog.Errorf("Requeue - Error adding/updating deployment for sitepod %s: %s", sitepodName, err)
-		c.queue.AddAfter(key, RetryDelay)
+		c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
 		return
 	}
 
@@ -257,7 +259,7 @@ func (c *SitepodController) syncSitepod(key string) {
 	pvObj, err := c.pvUpdater(pv)
 	if err != nil {
 		glog.Errorf("Error adding/updating new PV for sitepod %s: %s", sitepodName, err)
-		c.queue.AddAfter(key, RetryDelay)
+		c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
 		return
 	}
 	pv = pvObj.(*k8s_api.PersistentVolume)
@@ -268,7 +270,7 @@ func (c *SitepodController) syncSitepod(key string) {
 		err = os.MkdirAll(sitepodDataPath, 0700)
 		if err != nil {
 			glog.Errorf("Unable to create directory %s: %v", sitepodDataPath, err)
-			c.queue.AddAfter(key, RetryDelay)
+			c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
 			return
 		}
 		//create home directory
@@ -276,7 +278,7 @@ func (c *SitepodController) syncSitepod(key string) {
 		err = os.MkdirAll(path.Join(sitepodDataPath, "home"), 0755)
 		if err != nil {
 			glog.Errorf("Unable to create home directory on %s: %v", sitepodDataPath, err)
-			c.queue.AddAfter(key, RetryDelay)
+			c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
 			return
 		}
 
@@ -284,7 +286,7 @@ func (c *SitepodController) syncSitepod(key string) {
 		_, err = c.pvUpdater(pv)
 		if err != nil {
 			glog.Errorf("Error adding/updating new PV for sitepod %s: %s", sitepodName, err)
-			c.queue.AddAfter(key, RetryDelay)
+			c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
 			return
 		}
 	}
@@ -355,7 +357,7 @@ func (c *SitepodController) deleteSitepod(key string) {
 
 		if err = res.Error(); err != nil {
 			glog.Errorf("Unable to delete %s: %+v", sitepodResource, err)
-			c.queue.AddAfter(key, RetryDelay)
+			c.queue.AddAfter(deleteSitepodRequest{key}, RetryDelay)
 		}
 	}
 }
