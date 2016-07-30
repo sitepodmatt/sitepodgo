@@ -19,6 +19,7 @@ import (
 	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/util/workqueue"
@@ -136,9 +137,15 @@ func (c *SitepodController) worker() {
 
 			switch item.(type) {
 			case processSitepodRequest:
-				c.syncSitepod(item.(processSitepodRequest).id)
+				id := item.(processSitepodRequest).id
+				glog.Infof("Handling updating for sitepod %s", id)
+				c.syncSitepod(id)
+				glog.Infof("Completed updating for sitepod %s", id)
 			case deleteSitepodRequest:
-				c.deleteSitepod(item.(deleteSitepodRequest).id)
+				id := item.(deleteSitepodRequest).id
+				glog.Infof("Handling deleting for sitepod %s", id)
+				c.deleteSitepod(id)
+				glog.Infof("Completed deleting for sitepod %s", id)
 			default:
 				panic(fmt.Sprintf("Unknown type queued: %+v", item))
 			}
@@ -156,7 +163,7 @@ func (c *SitepodController) syncSitepod(key string) {
 	sitepodObjs, err := c.sitepodInformer.GetIndexer().ByIndex("uid", key)
 
 	if err != nil {
-		glog.Errorf("Unable to get sitepod %s: %+v", key, err)
+		glog.Errorf("Unexpected error Unable to get sitepod %s: %+v", key, err)
 		return
 	}
 
@@ -165,7 +172,8 @@ func (c *SitepodController) syncSitepod(key string) {
 		return
 	}
 
-	sitepod := sitepodObjs[0].(*v1.Sitepod)
+	sitepodObj, _ := conversion.NewCloner().DeepCopy(sitepodObjs[0])
+	sitepod := sitepodObj.(*v1.Sitepod)
 	sitepodKey := string(sitepod.UID)
 	sitepodName := sitepod.Name
 
@@ -176,17 +184,14 @@ func (c *SitepodController) syncSitepod(key string) {
 		panic(err)
 	}
 
-	glog.Infof("Provisioning sitepod %s : %s", sitepodName, sitepod.Spec.DisplayName)
+	glog.Infof("Provisioning sitepod %s : %s : %s", sitepodKey, sitepodName, sitepod.Spec.DisplayName)
 
-	glog.Info(sitepodKey)
 	deploymentObj, err := c.deploymentInformer.GetIndexer().ByIndex("sitepod", sitepodKey)
 
 	if err != nil {
-		glog.Errorf("Unexpected error getting deployments for %s ", sitepodName)
+		glog.Errorf("Unexpected error getting deployments for %s", sitepodName)
 		return
 	}
-
-	// SELECTOR USES SITEPOD RESOUdeploymentEVERSION
 
 	var deployment *ext_api.Deployment
 
@@ -195,13 +200,16 @@ func (c *SitepodController) syncSitepod(key string) {
 		deployment = &ext_api.Deployment{}
 		deployment.GenerateName = "sitepod-deployment-"
 	} else {
-		deployment = deploymentObj[0].(*ext_api.Deployment)
+		deploymentCloneObj, _ := conversion.NewCloner().DeepCopy(deploymentObj[0])
+		deployment = deploymentCloneObj.(*ext_api.Deployment)
+		glog.Infof("Using existing deployment %s for sitepod %s", deployment.GetName(), sitepodName)
 	}
 
 	labels := make(map[string]string)
 	labels["sitepod"] = sitepodKey
 	deployment.Spec.Replicas = 1
 	deployment.Spec.Selector = &unversioned.LabelSelector{MatchLabels: labels}
+	// TODO revisit single node restriction
 	deployment.Spec.Template.Spec.NodeName = hostname
 	if !(len(deployment.Spec.Template.Spec.Containers) > 1) {
 		deployment.Spec.Template.Spec.Containers = []k8s_api.Container{
@@ -218,12 +226,11 @@ func (c *SitepodController) syncSitepod(key string) {
 	_, err = c.deploymentUpdater(deployment)
 
 	if err != nil {
-		glog.Errorf("Requeue - Error adding/updating deployment for sitepod %s: %s", sitepodName, err)
+		glog.Errorf("Requeue - Error adding/updating deployment for sitepod %s: %+v", sitepodName, err)
 		c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
 		return
 	}
 
-	// CREATE THE PV
 	pvObjs, err := c.pvInformer.GetIndexer().ByIndex("sitepod", sitepodKey)
 
 	if err != nil {
@@ -238,7 +245,8 @@ func (c *SitepodController) syncSitepod(key string) {
 		pv.Annotations = make(map[string]string)
 		pv.Annotations["must-provision"] = "true"
 	} else {
-		pv = pvObjs[0].(*k8s_api.PersistentVolume)
+		pvObj, _ := conversion.NewCloner().DeepCopy(pvObjs[0])
+		pv = pvObj.(*k8s_api.PersistentVolume)
 	}
 
 	sitepodDataRoot := "/var/sitepod"
@@ -262,7 +270,8 @@ func (c *SitepodController) syncSitepod(key string) {
 		c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
 		return
 	}
-	pv = pvObj.(*k8s_api.PersistentVolume)
+	pvClonedObj, _ := conversion.NewCloner().DeepCopy(pvObj)
+	pv = pvClonedObj.(*k8s_api.PersistentVolume)
 
 	if pv.Annotations["must-provision"] == "true" {
 
