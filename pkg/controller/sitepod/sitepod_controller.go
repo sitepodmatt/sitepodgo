@@ -268,6 +268,7 @@ func (c *SitepodController) syncSitepod(key string) {
 		err = os.MkdirAll(sitepodDataPath, 0700)
 		if err != nil {
 			glog.Errorf("Unable to create directory %s: %v", sitepodDataPath, err)
+			c.queue.AddAfter(key, RetryDelay)
 			return
 		}
 		//create home directory
@@ -275,6 +276,7 @@ func (c *SitepodController) syncSitepod(key string) {
 		err = os.MkdirAll(path.Join(sitepodDataPath, "home"), 0755)
 		if err != nil {
 			glog.Errorf("Unable to create home directory on %s: %v", sitepodDataPath, err)
+			c.queue.AddAfter(key, RetryDelay)
 			return
 		}
 
@@ -345,12 +347,16 @@ func (c *SitepodController) deleteSitepod(key string) {
 		panic(err)
 	}
 	sitepodMatcher := labels.NewSelector().Add(*req)
-	//TODO: this needs to be wrapped away
-	res := c.rc.Delete().Resource("systemusers").Namespace("default").LabelsSelectorParam(sitepodMatcher).Do()
+	//TODO: figure out where to host this list
+	sitepodResources := []string{"systemusers", "serviceinstances"}
 
-	if err = res.Error(); err != nil {
-		glog.Errorf("Unable to delete system users: %+v", err)
-		c.queue.AddAfter(key, RetryDelay)
+	for _, sitepodResource := range sitepodResources {
+		res := c.rc.Delete().Resource("systemusers").Namespace("default").LabelsSelectorParam(sitepodMatcher).Do()
+
+		if err = res.Error(); err != nil {
+			glog.Errorf("Unable to delete %s: %+v", sitepodResource, err)
+			c.queue.AddAfter(key, RetryDelay)
+		}
 	}
 }
 
