@@ -25,6 +25,10 @@ import (
 	"k8s.io/kubernetes/pkg/util/workqueue"
 )
 
+var (
+	RetryDelay time.Duration = 200 * time.Millisecond
+)
+
 type ServicesController struct {
 	servicesInformer    framework.SharedIndexInformer
 	sitepodInformer     framework.SharedIndexInformer
@@ -33,7 +37,7 @@ type ServicesController struct {
 	configMapInformer   framework.SharedIndexInformer
 	deploymentUpdater   v1.UpdaterFunc
 	configMapUpdater    v1.UpdaterFunc
-	queue               workqueue.Interface
+	queue               workqueue.DelayingInterface
 }
 
 func NewServicesController(servicesInformer framework.SharedIndexInformer,
@@ -51,7 +55,7 @@ func NewServicesController(servicesInformer framework.SharedIndexInformer,
 		configMapInformer,
 		deploymentUpdater,
 		configMapUpdater,
-		workqueue.New(),
+		workqueue.NewDelayingQueue(),
 	}
 
 	servicesInformer.AddEventHandler(framework.ResourceEventHandlerFuncs{
@@ -88,6 +92,11 @@ func (c *ServicesController) Run(stopCh <-chan struct{}) {
 }
 
 func (c *ServicesController) worker() {
+
+	for !c.IsReady() {
+		time.Sleep(RetryDelay)
+	}
+
 	for {
 		func() {
 			key, quit := c.queue.Get()
@@ -107,12 +116,6 @@ func (c *ServicesController) IsReady() bool {
 
 func (c *ServicesController) syncService(key string) {
 
-	for !c.IsReady() {
-		time.Sleep(50 * time.Millisecond)
-		c.queue.Add(key)
-		return
-	}
-
 	obj, exists, err := c.servicesInformer.GetStore().GetByKey(key)
 
 	if err != nil {
@@ -129,14 +132,14 @@ func (c *ServicesController) syncService(key string) {
 	service := obj.(*v1.Serviceinstance)
 
 	if service.Spec.Type == "ssh" {
-		c.syncSSHService(service)
+		c.syncSSHService(service, key)
 	} else {
 		glog.Errorf("Unsupported service %s for service instance %s", service.Spec.Type, service.Name)
 	}
 
 }
 
-func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
+func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key string) {
 
 	sitepodLabel := service.Labels["sitepod"]
 
@@ -361,6 +364,7 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 
 	if err != nil {
 		glog.Errorf("Unable to update config map %s: %v", sshConfigMapName, err)
+		c.queue.AddAfter(key, RetryDelay)
 		return
 	}
 
@@ -424,6 +428,7 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance) {
 	_, err = c.deploymentUpdater(rootDeployment)
 	if err != nil {
 		glog.Errorf("Unable to update deployment %s: %s", rootDeployment.Name, err)
+		c.queue.AddAfter(key, RetryDelay)
 		return
 	}
 

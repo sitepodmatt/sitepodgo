@@ -193,13 +193,19 @@ func (c *EtcController) processPasswd() {
 
 	passwdOutput, err := processTemplate("etc_passwd", passwdContent)
 	if err != nil {
-		glog.Errorf("Unable to process template: %v", err)
+		glog.Errorf("Unable to process passwd template: %+v", err)
 		return
 	}
-	shadowOutput, err := processTemplate("etc_shadow", shadowContent)
 
+	shadowOutput, err := processTemplate("etc_shadow", shadowContent)
 	if err != nil {
-		glog.Errorf("Unable to process template: %v", err)
+		glog.Errorf("Unable to process shadow template: %+v", err)
+		return
+	}
+
+	groupOutput, err := processTemplate("etc_group", []string{})
+	if err != nil {
+		glog.Errorf("Unable to process group template: %+v", err)
 		return
 	}
 
@@ -212,10 +218,12 @@ func (c *EtcController) processPasswd() {
 	}
 	config.Data["passwd"] = passwdOutput
 	config.Data["shadow"] = shadowOutput
+	config.Data["group"] = groupOutput
+
 	_, err = c.configMapUpdater(config)
 
 	if err != nil {
-		glog.Errorf("Aborting writing etc file due to %s", err)
+		glog.Errorf("Aborting writing etc file due to %+v", err)
 		//TODO test if this is an expected optimistic concurrency update conflict?
 		c.queue.AddAfter("users", RetryDelay)
 	}
