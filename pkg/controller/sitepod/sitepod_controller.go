@@ -21,6 +21,7 @@ import (
 	"k8s.io/kubernetes/pkg/controller/framework"
 	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 	"sitepod.io/sitepod/pkg/api/v1"
@@ -29,6 +30,133 @@ import (
 var (
 	RetryDelay time.Duration = 200 * time.Millisecond
 )
+
+type SitepodIndexedStore interface {
+	GetByKey(key string) (item runtime.Object, exists bool, err error)
+	GetBySitepod(key string) (item runtime.Object, exists bool, err error)
+}
+
+type SimpleController struct {
+	WatchedResource    SitepodIndexedStore
+	DependentInformers map[string]framework.SharedIndexInformer
+	RestClients        map[string]*restclient.RESTClient
+	SyncFunc           func(string) error
+	DeleteFunc         func(string) error
+	queue              workqueue.DelayingInterface
+}
+
+func (c *SimpleController) Run(stopCh <-chan struct{}) {
+	go c.worker()
+	<-stopCh
+	c.queue.ShutDown()
+}
+
+type addUpdateRequest struct {
+	key string
+}
+
+type deleteRequest struct {
+	key string
+}
+
+func (c *SimpleController) worker() {
+	c.WaitReady()
+
+	for {
+		func() {
+			item, quit := c.queue.Get()
+			if quit {
+				return
+			}
+			defer c.queue.Done(item)
+
+			switch item.(type) {
+			case addUpdateRequest:
+				req := item.(addUpdateRequest)
+				if c.SyncFunc != nil {
+					c.SyncFunc(req.key)
+				}
+			case deleteSitepodRequest:
+				//TODO process by key
+			default:
+			}
+
+		}()
+
+	}
+}
+
+func testSync(c *SimpleController, key string) error {
+
+	item, exists, err := c.WatchedResource.GetByKey(key)
+
+	if err != nil || !exists {
+		return err
+	}
+
+	sitepod := item.(*v1.Sitepod)
+	sitepodKey := string(sitepod.UID)
+
+	deploymentObj, exists, err := c.Concepts["deployments"].GetBySitepod(sitepodKey)
+
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		deploymentObj = c.Concepts["deployments"].CreateNew()
+	}
+
+	deployment := deploymentObj.(*ext_api.Deployment)
+
+	labels := make(map[string]string)
+	labels["sitepod"] = sitepodKey
+
+	deployment.Spec.Replicas = 1
+	deployment.Spec.Selector = &unversioned.LabelSelector{MatchLabels: labels}
+
+	// TODO thing about how we handle this with host volumes
+	deployment.Spec.Template.Spec.NodeName = hostname
+
+	if !containResourceWithName(deployment.Spec.Template.Spec.Containers, "sitepod-manager") {
+		deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers,
+			k8s_api.Container{
+				Name:  "sitepod-manager",
+				Image: "gcr.io/google_containers/pause:2.0",
+			},)
+		}
+	}
+	deployment.Spec.Template.GenerateName = "sitepod-pod-"
+	deployment.Spec.Template.Labels = labels
+	deployment.Labels = labels
+
+	err := c.Concepts["deployments"].Update(deployment)
+
+	if err != nil {
+		return err
+	}
+
+
+	return nil
+
+}
+
+func (c *SimpleController) WaitReady() {
+	for {
+		allReady := true
+		for _, di := range c.DependentInformers {
+			if !di.HasSynced() {
+				allReady = false
+				break
+			}
+		}
+		if allReady {
+			break
+		} else {
+			time.Sleep(RetryDelay)
+		}
+	}
+}
 
 type SitepodController struct {
 	sitepodInformer    framework.SharedIndexInformer
