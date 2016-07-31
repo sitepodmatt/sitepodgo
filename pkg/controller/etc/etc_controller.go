@@ -13,8 +13,13 @@ import (
 	"sitepod.io/sitepod/pkg/api/v1"
 
 	k8s_api "k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/controller/framework"
 	"k8s.io/kubernetes/pkg/util/workqueue"
+)
+
+var (
+	RetryDelay = 200 * time.Millisecond
 )
 
 type EtcController struct {
@@ -22,7 +27,7 @@ type EtcController struct {
 	systemUserInformer framework.SharedIndexInformer
 	configMapGetter    v1.GetterFunc
 	configMapUpdater   v1.UpdaterFunc
-	queue              workqueue.Interface
+	queue              workqueue.DelayingInterface
 }
 
 func NewEtcController(sitepodInformer framework.SharedIndexInformer,
@@ -35,13 +40,13 @@ func NewEtcController(sitepodInformer framework.SharedIndexInformer,
 		systemUserInformer,
 		configMapGetter,
 		configMapUpdater,
-		workqueue.New(),
+		workqueue.NewDelayingQueue(),
 	}
 
 	systemUserInformer.AddEventHandler(framework.ResourceEventHandlerFuncs{
-		AddFunc:    c.addSystemUser,
-		UpdateFunc: c.updateSystemUser,
-		DeleteFunc: c.deleteSystemUser,
+		AddFunc:    c.queueAddSystemUser,
+		UpdateFunc: c.queueUpdateSystemUser,
+		DeleteFunc: c.queueDeleteSystemUser,
 	})
 
 	return c
@@ -57,32 +62,39 @@ func (c *EtcController) Run(stopCh <-chan struct{}) {
 	c.queue.ShutDown()
 }
 
-func (c *EtcController) addSystemUser(obj interface{}) {
+func (c *EtcController) queueAddSystemUser(obj interface{}) {
 	user := obj.(*v1.SystemUser)
 	if user.Status.AssignedFileUID > 0 {
 		for _, etcKey := range SystemUserEtcs {
 			c.queue.Add(etcKey)
 		}
+	} else {
+		// We rely on the assignment of file uid will cause a new update event so no requeue
 	}
 }
 
-func (c *EtcController) updateSystemUser(old interface{}, cur interface{}) {
+func (c *EtcController) queueUpdateSystemUser(old interface{}, cur interface{}) {
 	if k8s_api.Semantic.DeepEqual(old, cur) {
 		return
 	}
-	//TODO confirm use cases: e.g. change user's shell?
-	c.addSystemUser(cur)
+	c.queueAddSystemUser(cur)
 }
 
-func (c *EtcController) deleteSystemUser(obj interface{}) {
-	c.addSystemUser(obj)
+func (c *EtcController) queueDeleteSystemUser(obj interface{}) {
+	c.queueAddSystemUser(obj)
 }
 
 func (c *EtcController) HasSynced() bool {
-	return false
+	return true
 }
 
 func (c *EtcController) worker() {
+
+	if !c.systemUserInformer.HasSynced() {
+		glog.Infof("Waiting for system users controller to sync")
+		time.Sleep(RetryDelay)
+	}
+
 	for {
 		func() {
 			key, quit := c.queue.Get()
@@ -100,19 +112,12 @@ func (c *EtcController) syncEtc(key string) {
 	defer func() {
 		glog.V(4).Infof("Finished syncing etc file key %s. (%v)", key, time.Now().Sub(startTime))
 	}()
-	if !c.systemUserInformer.HasSynced() {
-		// Sleep so we give the pod reflector goroutine a chance to run.
-		time.Sleep(100 * time.Millisecond)
-		glog.Infof("Waiting for system users controller to sync, requeuing etc file with key %v", key)
-		c.queue.Add(key)
-		return
-	}
 
 	switch key {
 	case "users":
 		c.processPasswd()
 	default:
-		glog.Errorf("Unable to process %s", key)
+		glog.Errorf("Unable to process unexpected key %s", key)
 	}
 
 }
@@ -124,12 +129,19 @@ func (c *EtcController) processPasswd() {
 	systemUserKeys := suStore.ListKeys()
 	var err error
 
+	// TODO consider how globally scoped this config map should be
 	configObj, err := c.configMapGetter("user-etcs")
 
 	if err != nil {
-		newConfigMap := &k8s_api.ConfigMap{}
-		newConfigMap.Name = "user-etcs"
-		configObj = newConfigMap
+		if errors.IsNotFound(err) {
+			newConfigMap := &k8s_api.ConfigMap{}
+			newConfigMap.Name = "user-etcs"
+			configObj = newConfigMap
+		} else {
+			glog.Errorf("Unexpected error get user-etcs config map: %+v", err)
+			// NOTE don't requeue here we'll just wait until next full sync
+			return
+		}
 	}
 
 	config := configObj.(*k8s_api.ConfigMap)
@@ -147,6 +159,8 @@ func (c *EtcController) processPasswd() {
 			continue
 		}
 
+		//TODO add a sitepod group - 2000
+
 		user := systemUserObj.(*v1.SystemUser)
 		passwdContent = append(passwdContent, fmt.Sprintf("%s:%s:%d:%d:%s:%s:%s\n",
 			user.GetUsername(),
@@ -157,9 +171,7 @@ func (c *EtcController) processPasswd() {
 			user.GetHomeDirectory(),
 			user.GetShell()))
 
-		glog.Infof("Testing shadow")
 		if user.Spec.Password.IsValid() {
-			glog.Infof("Generating shadow")
 			shadowPassword := fmt.Sprintf("$6$%s$%s",
 				user.Spec.Password.Salt,
 				user.Spec.Password.CombinedHash)
@@ -204,6 +216,8 @@ func (c *EtcController) processPasswd() {
 
 	if err != nil {
 		glog.Errorf("Aborting writing etc file due to %s", err)
+		//TODO test if this is an expected optimistic concurrency update conflict?
+		c.queue.AddAfter("users", RetryDelay)
 	}
 
 }
