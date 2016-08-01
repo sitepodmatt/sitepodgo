@@ -38,7 +38,7 @@ type SitepodIndexedStore interface {
 
 type SimpleController struct {
 	WatchedResource    SitepodIndexedStore
-	DependentInformers map[string]framework.SharedIndexInformer
+	DependentResources map[string]SitepodIndexedStore
 	RestClients        map[string]*restclient.RESTClient
 	SyncFunc           func(string) error
 	DeleteFunc         func(string) error
@@ -87,25 +87,44 @@ func (c *SimpleController) worker() {
 }
 
 func testSync(c *SimpleController, key string) error {
+	/
+	item, exists := c.WatchedResource.GetByKey(key)
 
-	item, exists, err := c.WatchedResource.GetByKey(key)
-
-	if err != nil || !exists {
-		return err
+	if !exists {
+		glog.Infof("Sitepod %s not longer available. Presume this has since been deleted", key)
+		return nil
 	}
 
 	sitepod := item.(*v1.Sitepod)
 	sitepodKey := string(sitepod.UID)
 
-	deploymentObj, exists, err := c.Concepts["deployments"].GetBySitepod(sitepodKey)
+	// TODO enforce validation at api level that len > 0
+	defaultPvc := sitepod.Spec.VolumeClaims[0]
 
-	if err != nil {
-		return err
-	}
+	item, exists = c.DependentResources["PVClaims"].GetByKey(defaultPvc)
 
 	if !exists {
-		deploymentObj = c.Concepts["deployments"].CreateNew()
+		return SpecError{"PVC %s not yet found", defaultPvc}
 	}
+
+	pvc := item.(*k8s_api.PersistentVolumeClaim)
+
+	if len(pvc.Spec.VolumeName) == 0 {
+		return NotReady{"PVC %s is not yet bound to a PV", defaultPvcc}
+	}
+
+	item = c.DependentResources["PV"].GetByKeyShouldExist(pv);
+
+	pv := item.(*k8s_api.PersistentVolume)
+
+	var pinnedHost *string
+	if pv.Spec.VolumeHost != nil {
+		pinnedHost = pv.Annotations["sitepod.io/pinned-host"]
+		// FAIL
+		//deployment must be Pinned
+	}
+
+	deploymentObj, isNew := c.Concepts["deployments"].GetExistingForSitepodOrCreate(sitepodKey)
 
 	deployment := deploymentObj.(*ext_api.Deployment)
 
@@ -115,8 +134,10 @@ func testSync(c *SimpleController, key string) error {
 	deployment.Spec.Replicas = 1
 	deployment.Spec.Selector = &unversioned.LabelSelector{MatchLabels: labels}
 
-	// TODO thing about how we handle this with host volumes
-	deployment.Spec.Template.Spec.NodeName = hostname
+	if pinnedHost != nil {
+		// if pv is pinned to a host
+		deployment.Spec.Template.Spec.NodeName = *pinnedHost
+	}
 
 	if !containResourceWithName(deployment.Spec.Template.Spec.Containers, "sitepod-manager") {
 		deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers,
@@ -130,15 +151,10 @@ func testSync(c *SimpleController, key string) error {
 	deployment.Spec.Template.Labels = labels
 	deployment.Labels = labels
 
-	err := c.Concepts["deployments"].Update(deployment)
-
-	if err != nil {
-		return err
-	}
-
+	// auto retry due to throw
+	c.Concepts["deployments"].Update(deployment)
 
 	return nil
-
 }
 
 func (c *SimpleController) WaitReady() {

@@ -13,8 +13,9 @@ type Sitepod struct {
 }
 
 type SitepodSpec struct {
-	DisplayName string `json:"displayName,omitempty"`
-	Description string `json:"description,omitempty"`
+	DisplayName  string   `json:"displayName,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	VolumeClaims []string `json:"volumeClaims,omitempty"`
 }
 
 type SitepodStatus struct {
