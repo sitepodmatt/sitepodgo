@@ -34,6 +34,29 @@ var (
 type SitepodIndexedStore interface {
 	GetByKey(key string) (item runtime.Object, exists bool, err error)
 	GetBySitepod(key string) (item runtime.Object, exists bool, err error)
+	HasSynced() bool
+}
+
+type InformerStore struct {
+	informer framework.SharedIndexInformer
+}
+
+func (is *InformerStore) GetByKey(key string) (runtime.Object, bool, error) {
+	iObj, exists, err := is.informer.GetStore().GetByKey(key)
+	if iObj != nil {
+		return nil, exists, err
+	} else {
+		return iObj.(runtime.Object), exists, err
+	}
+}
+
+func (is *InformerStore) GetBySitepod(key string) (runtime.Object, bool, error) {
+	iObjs, err := is.informer.GetIndexer().ByIndex("sitepod", key)
+	if len(iObjs) == 0 {
+		return nil, false, err
+	} else {
+		return iObjs[0].(runtime.Object), true, err
+	}
 }
 
 type SimpleController struct {
@@ -87,72 +110,74 @@ func (c *SimpleController) worker() {
 }
 
 func testSync(c *SimpleController, key string) error {
-	/
-	item, exists := c.WatchedResource.GetByKey(key)
 
-	if !exists {
-		glog.Infof("Sitepod %s not longer available. Presume this has since been deleted", key)
-		return nil
-	}
+	//item, exists := c.WatchedResource.GetByKey(key)
 
-	sitepod := item.(*v1.Sitepod)
-	sitepodKey := string(sitepod.UID)
+	//if !exists {
+	//glog.Infof("Sitepod %s not longer available. Presume this has since been deleted", key)
+	//return nil
+	//}
 
-	// TODO enforce validation at api level that len > 0
-	defaultPvc := sitepod.Spec.VolumeClaims[0]
+	//sitepod := item.(*v1.Sitepod)
+	//sitepodKey := string(sitepod.UID)
 
-	item, exists = c.DependentResources["PVClaims"].GetByKey(defaultPvc)
+	//// TODO enforce validation at api level that len > 0
+	//defaultPvc := sitepod.Spec.VolumeClaims[0]
 
-	if !exists {
-		return SpecError{"PVC %s not yet found", defaultPvc}
-	}
+	//item, exists = c.DependentResources["PVClaims"].GetByKey(defaultPvc)
 
-	pvc := item.(*k8s_api.PersistentVolumeClaim)
+	//if !exists {
+	//return SpecError{"PVC %s not yet found", defaultPvc}
+	//}
 
-	if len(pvc.Spec.VolumeName) == 0 {
-		return NotReady{"PVC %s is not yet bound to a PV", defaultPvcc}
-	}
+	//pvc := item.(*k8s_api.PersistentVolumeClaim)
 
-	item = c.DependentResources["PV"].GetByKeyShouldExist(pv);
+	//if len(pvc.Spec.VolumeName) == 0 {
+	//return NotReady{"PVC %s is not yet bound to a PV", defaultPvcc}
+	//}
 
-	pv := item.(*k8s_api.PersistentVolume)
+	//item = c.DependentResources["PV"].GetByKeyShouldExist(pv);
 
-	var pinnedHost *string
-	if pv.Spec.VolumeHost != nil {
-		pinnedHost = pv.Annotations["sitepod.io/pinned-host"]
-		// FAIL
-		//deployment must be Pinned
-	}
+	//pv := item.(*k8s_api.PersistentVolume)
 
-	deploymentObj, isNew := c.Concepts["deployments"].GetExistingForSitepodOrCreate(sitepodKey)
+	//var pinnedHost *string
+	//if pv.Spec.VolumeHost != nil {
+	//pinnedHost = pv.Annotations["sitepod.io/pinned-host"]
+	//// FAIL
+	////deployment must be Pinned
+	//}
 
-	deployment := deploymentObj.(*ext_api.Deployment)
+	//deploymentObj, isNew := c.Concepts["deployments"].GetExistingForSitepodOrCreate(sitepodKey)
 
-	labels := make(map[string]string)
-	labels["sitepod"] = sitepodKey
+	//deployment := deploymentObj.(*ext_api.Deployment)
 
-	deployment.Spec.Replicas = 1
-	deployment.Spec.Selector = &unversioned.LabelSelector{MatchLabels: labels}
+	//labels := make(map[string]string)
+	//labels["sitepod"] = sitepodKey
 
-	if pinnedHost != nil {
-		// if pv is pinned to a host
-		deployment.Spec.Template.Spec.NodeName = *pinnedHost
-	}
+	//deployment.Spec.Replicas = 1
+	//deployment.Spec.Selector = &unversioned.LabelSelector{MatchLabels: labels}
 
-	if !containResourceWithName(deployment.Spec.Template.Spec.Containers, "sitepod-manager") {
-		deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers,
-			k8s_api.Container{
-				Name:  "sitepod-manager",
-				Image: "gcr.io/google_containers/pause:2.0",
-			},)
-		}
-	}
-	deployment.Spec.Template.GenerateName = "sitepod-pod-"
-	deployment.Spec.Template.Labels = labels
-	deployment.Labels = labels
+	//if pinnedHost != nil {
+	//// if pv is pinned to a host
+	//deployment.Spec.Template.Spec.NodeName = *pinnedHost
+	//}
 
-	// auto retry due to throw
-	c.Concepts["deployments"].Update(deployment)
+	//if !containResourceWithName(deployment.Spec.Template.Spec.Containers, "sitepod-manager") {
+	//deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers,
+	//k8s_api.Container{
+	//Name:  "sitepod-manager",
+	//Image: "gcr.io/google_containers/pause:2.0",
+	//},)
+	//}
+	//}
+	//deployment.Spec.Template.GenerateName = "sitepod-pod-"
+	//deployment.Spec.Template.Labels = labels
+	//deployment.Labels = labels
+	//.
+	//// auto retry due to throw
+	//c.Registry.Deployments.Update(
+
+	//c.Concepts["deployments"].Update(deployment)
 
 	return nil
 }
@@ -160,7 +185,7 @@ func testSync(c *SimpleController, key string) error {
 func (c *SimpleController) WaitReady() {
 	for {
 		allReady := true
-		for _, di := range c.DependentInformers {
+		for _, di := range c.DependentResources {
 			if !di.HasSynced() {
 				allReady = false
 				break
