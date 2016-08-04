@@ -2,7 +2,9 @@ package v1
 
 import (
 	"errors"
+	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/unversioned"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 type Sitepod struct {
@@ -27,6 +29,11 @@ func (s *Sitepod) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
 }
 
+func (s *Sitepod) GetObjectMeta() meta.Object {
+	om := v1.ObjectMeta(s.ObjectMeta)
+	return &om
+}
+
 func (s *Sitepod) GetRootStorageName() (string, error) {
 
 	if len(s.Status.LocalStorage) == 0 {
@@ -45,3 +52,12 @@ type SitepodList struct {
 func (s *SitepodList) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
 }
+
+func (s *SitepodList) GetListMeta() unversioned.List {
+	lm := unversioned.ListMeta(s.ListMeta)
+	return &lm
+}
+
+//func (s *SitepodList) GetListMeta() .List {
+//return &s.ListMeta
+//}
