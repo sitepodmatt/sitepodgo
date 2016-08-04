@@ -4,11 +4,13 @@ import (
 	"github.com/golang/glog"
 
 	"sitepod.io/sitepod/pkg/api/v1"
+	"sitepod.io/sitepod/pkg/client"
 	"sitepod.io/sitepod/pkg/controller/etc"
 	"sitepod.io/sitepod/pkg/controller/services"
 	"sitepod.io/sitepod/pkg/controller/sitepod"
 	"sitepod.io/sitepod/pkg/controller/systemuser"
 
+	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/controller/framework"
 )
@@ -80,60 +82,53 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 		}
 	}
 
-	c.etcController = etc.NewEtcController(
-		c.sitepodInformer,
-		c.systemUserInformer,
-		c.coreConcepts.ConfigMaps.Getter,
-		c.coreConcepts.ConfigMaps.Updater)
-	go c.etcController.Run(stopCh)
+	cc := client.NewClient(api.Scheme)
+	if cc != nil {
+		panic(err)
+	}
 
-	c.servicesController = services.NewServicesController(
-		c.servicesInformer,
-		c.sitepodInformer,
-		c.deploymentInformer,
-		c.pvInformer,
-		c.configMapInformer,
-		c.extConcepts.Deployments.Updater,
-		c.coreConcepts.ConfigMaps.Updater,
-	)
-	go c.servicesController.Run(stopCh)
+	//c.etcController = etc.NewEtcController(
+	//c.sitepodInformer,
+	//c.systemUserInformer,
+	//c.coreConcepts.ConfigMaps.Getter,
+	//c.coreConcepts.ConfigMaps.Updater)
+	//go c.etcController.Run(stopCh)
 
-	c.sitepodController = sitepod.NewSitepodController(
-		c.sitepodInformer,
-		c.pvInformer,
-		c.deploymentInformer,
-		c.concepts.Sitepods.Updater,
-		c.coreConcepts.Rcs.Updater,
-		c.coreConcepts.PersistentVolumes.Updater,
-		c.extConcepts.Deployments.Updater,
-		c.extConcepts.Deployments.Deleter,
-		c.extConcepts.ReplicaSets.GetWithLabels,
-		c.extConcepts.ReplicaSets.Deleter,
-		c.concepts.RestClient,
-	)
+	//c.servicesController = services.NewServicesController(
+	//c.servicesInformer,
+	//c.sitepodInformer,
+	//c.deploymentInformer,
+	//c.pvInformer,
+	//c.configMapInformer,
+	//c.extConcepts.Deployments.Updater,
+	//c.coreConcepts.ConfigMaps.Updater,
+	//)
+	//go c.servicesController.Run(stopCh)
+
+	c.sitepodController = sitepod.NewSitepodController(cc)
 	go c.sitepodController.Run(stopCh)
 
-	c.systemUserController = systemuser.NewSystemUserController(c.sitepodInformer,
-		c.systemUserInformer,
-		c.pvInformer,
-		c.concepts.Clusters.Getter,
-		c.concepts.Clusters.Updater,
-		c.concepts.SystemUsers.Updater,
-	)
+	//c.systemUserController = systemuser.NewSystemUserController(c.sitepodInformer,
+	//c.systemUserInformer,
+	//c.pvInformer,
+	//c.concepts.Clusters.Getter,
+	//c.concepts.Clusters.Updater,
+	//c.concepts.SystemUsers.Updater,
+	//)
 
-	go c.systemUserController.Run(stopCh)
+	//go c.systemUserController.Run(stopCh)
 
-	go c.systemUserInformer.Run(stopCh)
-	go c.servicesInformer.Run(stopCh)
-	go c.pvInformer.Run(stopCh)
-	go c.podInformer.Run(stopCh)
-	go c.deploymentInformer.Run(stopCh)
-	go c.sitepodInformer.Run(stopCh)
-	go c.configMapInformer.Run(stopCh)
+	//go c.systemUserInformer.Run(stopCh)
+	//go c.servicesInformer.Run(stopCh)
+	//go c.pvInformer.Run(stopCh)
+	//go c.podInformer.Run(stopCh)
+	//go c.deploymentInformer.Run(stopCh)
+	//go c.sitepodInformer.Run(stopCh)
+	//go c.configMapInformer.Run(stopCh)
 
-	glog.Info("Waiting to stop")
-	<-stopCh
-	glog.Info("Stopped")
+	//glog.Info("Waiting to stop")
+	//<-stopCh
+	//glog.Info("Stopped")
 }
 
 func (c *SingleNodeController) HasSynced() bool {

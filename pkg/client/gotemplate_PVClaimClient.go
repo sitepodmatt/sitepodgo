@@ -15,48 +15,48 @@ import (
 )
 
 var (
-	resyncPeriodSitepodClient = 5 * time.Minute
+	resyncPeriodPVClaimClient = 5 * time.Minute
 )
 
-func HackImportIgnoredSitepodClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
+func HackImportIgnoredPVClaimClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
 // template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName)
 
-type SitepodClient struct {
+type PVClaimClient struct {
 	rc            *restclient.RESTClient
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewSitepodClient(rc *restclient.RESTClient, ns string) *SitepodClient {
-	return &SitepodClient{
+func NewPVClaimClient(rc *restclient.RESTClient, ns string) *PVClaimClient {
+	return &PVClaimClient{
 		rc:            rc,
 		ns:            ns,
-		supportedType: reflect.TypeOf(&v1.Sitepod{}),
+		supportedType: reflect.TypeOf(&k8s_api.PersistentVolumeClaim{}),
 	}
 }
 
-func (c *SitepodClient) StartInformer(stopCh <-chan struct{}) {
+func (c *PVClaimClient) StartInformer(stopCh <-chan struct{}) {
 	//TODO do we still need to do this now we have single scheme
 	pc := runtime.NewParameterCodec(k8s_api.Scheme)
 
 	c.informer = framework.NewSharedIndexInformer(
 		api.NewListWatchFromClient(c.rc, "x", c.ns, nil, pc),
-		&v1.Sitepod{},
-		resyncPeriodSitepodClient,
+		&k8s_api.PersistentVolumeClaim{},
+		resyncPeriodPVClaimClient,
 		nil,
 	)
 
 	c.informer.Run(stopCh)
 }
 
-func (c *SitepodClient) NewEmpty() *v1.Sitepod {
-	return &v1.Sitepod{}
+func (c *PVClaimClient) NewEmpty() *k8s_api.PersistentVolumeClaim {
+	return &k8s_api.PersistentVolumeClaim{}
 }
 
-func (c *SitepodClient) MaybeGetByKey(key string) (*v1.Sitepod, bool) {
+func (c *PVClaimClient) MaybeGetByKey(key string) (*k8s_api.PersistentVolumeClaim, bool) {
 	iObj, exists, err := c.informer.GetStore().GetByKey(key)
 
 	if err != nil {
@@ -66,11 +66,11 @@ func (c *SitepodClient) MaybeGetByKey(key string) (*v1.Sitepod, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		return iObj.(*v1.Sitepod), exists
+		return iObj.(*k8s_api.PersistentVolumeClaim), exists
 	}
 }
 
-func (c *SitepodClient) GetByKey(key string) *v1.Sitepod {
+func (c *PVClaimClient) GetByKey(key string) *k8s_api.PersistentVolumeClaim {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
@@ -80,21 +80,21 @@ func (c *SitepodClient) GetByKey(key string) *v1.Sitepod {
 	return item
 }
 
-func (c *SitepodClient) BySitepodKey(sitepodKey string) ([]*v1.Sitepod, error) {
+func (c *PVClaimClient) BySitepodKey(sitepodKey string) ([]*k8s_api.PersistentVolumeClaim, error) {
 	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
 
 	if err != nil {
 		return nil, err
 	}
 
-	typedItems := []*v1.Sitepod{}
+	typedItems := []*k8s_api.PersistentVolumeClaim{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*v1.Sitepod))
+		typedItems = append(typedItems, item.(*k8s_api.PersistentVolumeClaim))
 	}
 	return typedItems, nil
 }
 
-func (c *SitepodClient) SingleBySitepodKey(sitepodKey string) *v1.Sitepod {
+func (c *PVClaimClient) SingleBySitepodKey(sitepodKey string) *k8s_api.PersistentVolumeClaim {
 
 	items, err := c.BySitepodKey(sitepodKey)
 
@@ -110,7 +110,7 @@ func (c *SitepodClient) SingleBySitepodKey(sitepodKey string) *v1.Sitepod {
 
 }
 
-func (c *SitepodClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Sitepod, bool) {
+func (c *PVClaimClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.PersistentVolumeClaim, bool) {
 
 	items, err := c.BySitepodKey(sitepodKey)
 
@@ -126,9 +126,9 @@ func (c *SitepodClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Sitepod,
 
 }
 
-func (c *SitepodClient) Add(target *v1.Sitepod) *v1.Sitepod {
+func (c *PVClaimClient) Add(target *k8s_api.PersistentVolumeClaim) *k8s_api.PersistentVolumeClaim {
 
-	result := c.rc.Post().Resource("Sitepod").Body(target).Do()
+	result := c.rc.Post().Resource("PersistentVolumeClaim").Body(target).Do()
 
 	if err := result.Error(); err != nil {
 		panic(err)
@@ -140,10 +140,10 @@ func (c *SitepodClient) Add(target *v1.Sitepod) *v1.Sitepod {
 		panic(err)
 	}
 
-	return r.(*v1.Sitepod)
+	return r.(*k8s_api.PersistentVolumeClaim)
 }
 
-func (c *SitepodClient) UpdateOrAdd(target *v1.Sitepod) *v1.Sitepod {
+func (c *PVClaimClient) UpdateOrAdd(target *k8s_api.PersistentVolumeClaim) *k8s_api.PersistentVolumeClaim {
 
 	accessor, err := meta.Accessor(target)
 	if err != nil {
@@ -153,11 +153,11 @@ func (c *SitepodClient) UpdateOrAdd(target *v1.Sitepod) *v1.Sitepod {
 	uid := accessor.GetUID()
 	if len(string(uid)) > 0 {
 		rName := accessor.GetName()
-		replacementTarget, err := c.rc.Put().Resource("Sitepod").Name(rName).Body(target).Do().Get()
+		replacementTarget, err := c.rc.Put().Resource("PersistentVolumeClaim").Name(rName).Body(target).Do().Get()
 		if err != nil {
 			panic(err)
 		}
-		return replacementTarget.(*v1.Sitepod)
+		return replacementTarget.(*k8s_api.PersistentVolumeClaim)
 	} else {
 		return c.Add(target)
 	}

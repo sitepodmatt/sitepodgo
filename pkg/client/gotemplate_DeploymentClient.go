@@ -15,48 +15,48 @@ import (
 )
 
 var (
-	resyncPeriodSitepodClient = 5 * time.Minute
+	resyncPeriodDeploymentClient = 5 * time.Minute
 )
 
-func HackImportIgnoredSitepodClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
+func HackImportIgnoredDeploymentClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
 // template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName)
 
-type SitepodClient struct {
+type DeploymentClient struct {
 	rc            *restclient.RESTClient
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewSitepodClient(rc *restclient.RESTClient, ns string) *SitepodClient {
-	return &SitepodClient{
+func NewDeploymentClient(rc *restclient.RESTClient, ns string) *DeploymentClient {
+	return &DeploymentClient{
 		rc:            rc,
 		ns:            ns,
-		supportedType: reflect.TypeOf(&v1.Sitepod{}),
+		supportedType: reflect.TypeOf(&ext_api.Deployment{}),
 	}
 }
 
-func (c *SitepodClient) StartInformer(stopCh <-chan struct{}) {
+func (c *DeploymentClient) StartInformer(stopCh <-chan struct{}) {
 	//TODO do we still need to do this now we have single scheme
 	pc := runtime.NewParameterCodec(k8s_api.Scheme)
 
 	c.informer = framework.NewSharedIndexInformer(
 		api.NewListWatchFromClient(c.rc, "x", c.ns, nil, pc),
-		&v1.Sitepod{},
-		resyncPeriodSitepodClient,
+		&ext_api.Deployment{},
+		resyncPeriodDeploymentClient,
 		nil,
 	)
 
 	c.informer.Run(stopCh)
 }
 
-func (c *SitepodClient) NewEmpty() *v1.Sitepod {
-	return &v1.Sitepod{}
+func (c *DeploymentClient) NewEmpty() *ext_api.Deployment {
+	return &ext_api.Deployment{}
 }
 
-func (c *SitepodClient) MaybeGetByKey(key string) (*v1.Sitepod, bool) {
+func (c *DeploymentClient) MaybeGetByKey(key string) (*ext_api.Deployment, bool) {
 	iObj, exists, err := c.informer.GetStore().GetByKey(key)
 
 	if err != nil {
@@ -66,11 +66,11 @@ func (c *SitepodClient) MaybeGetByKey(key string) (*v1.Sitepod, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		return iObj.(*v1.Sitepod), exists
+		return iObj.(*ext_api.Deployment), exists
 	}
 }
 
-func (c *SitepodClient) GetByKey(key string) *v1.Sitepod {
+func (c *DeploymentClient) GetByKey(key string) *ext_api.Deployment {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
@@ -80,21 +80,21 @@ func (c *SitepodClient) GetByKey(key string) *v1.Sitepod {
 	return item
 }
 
-func (c *SitepodClient) BySitepodKey(sitepodKey string) ([]*v1.Sitepod, error) {
+func (c *DeploymentClient) BySitepodKey(sitepodKey string) ([]*ext_api.Deployment, error) {
 	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
 
 	if err != nil {
 		return nil, err
 	}
 
-	typedItems := []*v1.Sitepod{}
+	typedItems := []*ext_api.Deployment{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*v1.Sitepod))
+		typedItems = append(typedItems, item.(*ext_api.Deployment))
 	}
 	return typedItems, nil
 }
 
-func (c *SitepodClient) SingleBySitepodKey(sitepodKey string) *v1.Sitepod {
+func (c *DeploymentClient) SingleBySitepodKey(sitepodKey string) *ext_api.Deployment {
 
 	items, err := c.BySitepodKey(sitepodKey)
 
@@ -110,7 +110,7 @@ func (c *SitepodClient) SingleBySitepodKey(sitepodKey string) *v1.Sitepod {
 
 }
 
-func (c *SitepodClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Sitepod, bool) {
+func (c *DeploymentClient) MaybeSingleBySitepodKey(sitepodKey string) (*ext_api.Deployment, bool) {
 
 	items, err := c.BySitepodKey(sitepodKey)
 
@@ -126,9 +126,9 @@ func (c *SitepodClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Sitepod,
 
 }
 
-func (c *SitepodClient) Add(target *v1.Sitepod) *v1.Sitepod {
+func (c *DeploymentClient) Add(target *ext_api.Deployment) *ext_api.Deployment {
 
-	result := c.rc.Post().Resource("Sitepod").Body(target).Do()
+	result := c.rc.Post().Resource("Deployment").Body(target).Do()
 
 	if err := result.Error(); err != nil {
 		panic(err)
@@ -140,10 +140,10 @@ func (c *SitepodClient) Add(target *v1.Sitepod) *v1.Sitepod {
 		panic(err)
 	}
 
-	return r.(*v1.Sitepod)
+	return r.(*ext_api.Deployment)
 }
 
-func (c *SitepodClient) UpdateOrAdd(target *v1.Sitepod) *v1.Sitepod {
+func (c *DeploymentClient) UpdateOrAdd(target *ext_api.Deployment) *ext_api.Deployment {
 
 	accessor, err := meta.Accessor(target)
 	if err != nil {
@@ -153,11 +153,11 @@ func (c *SitepodClient) UpdateOrAdd(target *v1.Sitepod) *v1.Sitepod {
 	uid := accessor.GetUID()
 	if len(string(uid)) > 0 {
 		rName := accessor.GetName()
-		replacementTarget, err := c.rc.Put().Resource("Sitepod").Name(rName).Body(target).Do().Get()
+		replacementTarget, err := c.rc.Put().Resource("Deployment").Name(rName).Body(target).Do().Get()
 		if err != nil {
 			panic(err)
 		}
-		return replacementTarget.(*v1.Sitepod)
+		return replacementTarget.(*ext_api.Deployment)
 	} else {
 		return c.Add(target)
 	}

@@ -7,539 +7,113 @@ package sitepod
 
 import (
 	"fmt"
-	"os"
-	"path"
-	"time"
 
+	. "github.com/ahmetalpbalkan/go-linq"
 	"github.com/golang/glog"
-
 	k8s_api "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/resource"
-	"k8s.io/kubernetes/pkg/api/unversioned"
-	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
-	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
-	"k8s.io/kubernetes/pkg/conversion"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/util/workqueue"
 	"sitepod.io/sitepod/pkg/api/v1"
+	cc "sitepod.io/sitepod/pkg/client"
+	. "sitepod.io/sitepod/pkg/controller/shared"
 )
-
-var (
-	RetryDelay time.Duration = 200 * time.Millisecond
-)
-
-type SitepodIndexedStore interface {
-	GetByKey(key string) (item runtime.Object, exists bool, err error)
-	GetBySitepod(key string) (item runtime.Object, exists bool, err error)
-	HasSynced() bool
-}
-
-type InformerStore struct {
-	informer framework.SharedIndexInformer
-}
-
-func (is *InformerStore) GetByKey(key string) (runtime.Object, bool, error) {
-	iObj, exists, err := is.informer.GetStore().GetByKey(key)
-	if iObj != nil {
-		return nil, exists, err
-	} else {
-		return iObj.(runtime.Object), exists, err
-	}
-}
-
-func (is *InformerStore) GetBySitepod(key string) (runtime.Object, bool, error) {
-	iObjs, err := is.informer.GetIndexer().ByIndex("sitepod", key)
-	if len(iObjs) == 0 {
-		return nil, false, err
-	} else {
-		return iObjs[0].(runtime.Object), true, err
-	}
-}
-
-type SimpleController struct {
-	WatchedResource    SitepodIndexedStore
-	DependentResources map[string]SitepodIndexedStore
-	RestClients        map[string]*restclient.RESTClient
-	SyncFunc           func(string) error
-	DeleteFunc         func(string) error
-	queue              workqueue.DelayingInterface
-}
-
-func (c *SimpleController) Run(stopCh <-chan struct{}) {
-	go c.worker()
-	<-stopCh
-	c.queue.ShutDown()
-}
-
-type addUpdateRequest struct {
-	key string
-}
-
-type deleteRequest struct {
-	key string
-}
-
-func (c *SimpleController) worker() {
-	c.WaitReady()
-
-	for {
-		func() {
-			item, quit := c.queue.Get()
-			if quit {
-				return
-			}
-			defer c.queue.Done(item)
-
-			switch item.(type) {
-			case addUpdateRequest:
-				req := item.(addUpdateRequest)
-				if c.SyncFunc != nil {
-					c.SyncFunc(req.key)
-				}
-			case deleteSitepodRequest:
-				//TODO process by key
-			default:
-			}
-
-		}()
-
-	}
-}
-
-func testSync(c *SimpleController, key string) error {
-
-	//item, exists := c.WatchedResource.GetByKey(key)
-
-	//if !exists {
-	//glog.Infof("Sitepod %s not longer available. Presume this has since been deleted", key)
-	//return nil
-	//}
-
-	//sitepod := item.(*v1.Sitepod)
-	//sitepodKey := string(sitepod.UID)
-
-	//// TODO enforce validation at api level that len > 0
-	//defaultPvc := sitepod.Spec.VolumeClaims[0]
-
-	//item, exists = c.DependentResources["PVClaims"].GetByKey(defaultPvc)
-
-	//if !exists {
-	//return SpecError{"PVC %s not yet found", defaultPvc}
-	//}
-
-	//pvc := item.(*k8s_api.PersistentVolumeClaim)
-
-	//if len(pvc.Spec.VolumeName) == 0 {
-	//return NotReady{"PVC %s is not yet bound to a PV", defaultPvcc}
-	//}
-
-	//item = c.DependentResources["PV"].GetByKeyShouldExist(pv);
-
-	//pv := item.(*k8s_api.PersistentVolume)
-
-	//var pinnedHost *string
-	//if pv.Spec.VolumeHost != nil {
-	//pinnedHost = pv.Annotations["sitepod.io/pinned-host"]
-	//// FAIL
-	////deployment must be Pinned
-	//}
-
-	//deploymentObj, isNew := c.Concepts["deployments"].GetExistingForSitepodOrCreate(sitepodKey)
-
-	//deployment := deploymentObj.(*ext_api.Deployment)
-
-	//labels := make(map[string]string)
-	//labels["sitepod"] = sitepodKey
-
-	//deployment.Spec.Replicas = 1
-	//deployment.Spec.Selector = &unversioned.LabelSelector{MatchLabels: labels}
-
-	//if pinnedHost != nil {
-	//// if pv is pinned to a host
-	//deployment.Spec.Template.Spec.NodeName = *pinnedHost
-	//}
-
-	//if !containResourceWithName(deployment.Spec.Template.Spec.Containers, "sitepod-manager") {
-	//deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers,
-	//k8s_api.Container{
-	//Name:  "sitepod-manager",
-	//Image: "gcr.io/google_containers/pause:2.0",
-	//},)
-	//}
-	//}
-	//deployment.Spec.Template.GenerateName = "sitepod-pod-"
-	//deployment.Spec.Template.Labels = labels
-	//deployment.Labels = labels
-	//.
-	//// auto retry due to throw
-	//c.Registry.Deployments.Update(
-
-	//c.Concepts["deployments"].Update(deployment)
-
-	return nil
-}
-
-func (c *SimpleController) WaitReady() {
-	for {
-		allReady := true
-		for _, di := range c.DependentResources {
-			if !di.HasSynced() {
-				allReady = false
-				break
-			}
-		}
-		if allReady {
-			break
-		} else {
-			time.Sleep(RetryDelay)
-		}
-	}
-}
 
 type SitepodController struct {
-	sitepodInformer    framework.SharedIndexInformer
-	pvInformer         framework.SharedIndexInformer
-	deploymentInformer framework.SharedIndexInformer
-	sitepodUpdater     v1.UpdaterFunc
-	rcUpdater          v1.UpdaterFunc
-	pvUpdater          v1.UpdaterFunc
-	deploymentUpdater  v1.UpdaterFunc
-	deploymentDeleter  v1.DeleterFunc
-	rsFilter           v1.ListLabelFunc
-	rsDeleter          v1.DeleterFunc
-	queue              workqueue.DelayingInterface
-	rc                 *restclient.RESTClient
+	*SimpleController
 }
 
-func NewSitepodController(sitepodInformer framework.SharedIndexInformer,
-	pvInformer framework.SharedIndexInformer,
-	deploymentInformer framework.SharedIndexInformer,
-	sitepodUpdater v1.UpdaterFunc,
-	rcUpdater v1.UpdaterFunc,
-	pvUpdater v1.UpdaterFunc,
-	deploymentUpdater v1.UpdaterFunc,
-	deploymentDeleter v1.DeleterFunc,
-	rsFilter v1.ListLabelFunc,
-	rsDeleter v1.DeleterFunc,
-	rc *restclient.RESTClient) framework.ControllerInterface {
+func NewSitepodController(client *cc.Client) framework.ControllerInterface {
 
-	c := &SitepodController{sitepodInformer,
-		pvInformer,
-		deploymentInformer,
-		sitepodUpdater,
-		rcUpdater,
-		pvUpdater,
-		deploymentUpdater,
-		deploymentDeleter,
-		rsFilter,
-		rsDeleter,
-		workqueue.NewDelayingQueue(),
-		rc,
-	}
-
-	sitepodInformer.AddEventHandler(framework.ResourceEventHandlerFuncs{
-		AddFunc:    c.queueAddSitepod,
-		UpdateFunc: c.queueUpdateSitepod,
-		DeleteFunc: c.queueDeleteSitepod})
-
-	return c
+	sc := &SitepodController{NewSimpleController(client, []Syncer{}, nil, nil)}
+	client.Sitepods().AddInformerHandlers(framework.ResourceEventHandlerFuncs{
+		AddFunc:    nil,
+		UpdateFunc: nil,
+		DeleteFunc,
+	})
 }
 
-type processSitepodRequest struct {
-	id string
+func (sc *SitepodController) AddFunc(item interface{}) {
+	sc.EnqueueUpdate(client.Sitepods().KeyOf(item))
 }
 
-type deleteSitepodRequest struct {
-	id string
-}
-
-var workQueueKeyFunc func(interface{}) (string, error) = uidKeyFunc
-
-func uidKeyFunc(obj interface{}) (string, error) {
-	sitepod := obj.(*v1.Sitepod)
-	return string(sitepod.UID), nil
-}
-
-func (c *SitepodController) queueAddSitepod(obj interface{}) {
-	sitepod := obj.(*v1.Sitepod)
-	key, _ := workQueueKeyFunc(sitepod)
-	c.queue.Add(processSitepodRequest{key})
-}
-
-func (c *SitepodController) queueUpdateSitepod(old interface{}, cur interface{}) {
-	if k8s_api.Semantic.DeepEqual(old, cur) {
-		return
-	}
-	sitepod := cur.(*v1.Sitepod)
-	key, _ := workQueueKeyFunc(sitepod)
-	c.queue.Add(processSitepodRequest{key})
-}
-
-func (c *SitepodController) queueDeleteSitepod(obj interface{}) {
-	key, _ := workQueueKeyFunc(obj)
-	c.queue.Add(deleteSitepodRequest{key})
-}
-
-func (c *SitepodController) Run(stopCh <-chan struct{}) {
-	go c.worker()
-	<-stopCh
-	c.queue.ShutDown()
-}
-
-func (c *SitepodController) worker() {
-
-	for !c.IsReady() {
-		glog.Info("Waiting for dependencies to be ready")
-		time.Sleep(RetryDelay)
-	}
-
-	for {
-		func() {
-			item, quit := c.queue.Get()
-			if quit {
-				return
-			}
-			defer c.queue.Done(item)
-
-			switch item.(type) {
-			case processSitepodRequest:
-				id := item.(processSitepodRequest).id
-				glog.Infof("Handling updating for sitepod %s", id)
-				c.syncSitepod(id)
-				glog.Infof("Completed updating for sitepod %s", id)
-			case deleteSitepodRequest:
-				id := item.(deleteSitepodRequest).id
-				glog.Infof("Handling deleting for sitepod %s", id)
-				c.deleteSitepod(id)
-				glog.Infof("Completed deleting for sitepod %s", id)
-			default:
-				panic(fmt.Sprintf("Unknown type queued: %+v", item))
-			}
-
-		}()
+func (sc *SitepodController) UpdateFunc(old interface{}, cur interface{}) {
+	if !client.Sitepods().DeepEqual(old, cur) {
+		sc.EnqueueUpdate(client.Sitepods().KeyOf(cur))
 	}
 }
 
-func (c *SitepodController) IsReady() bool {
-	return (c.sitepodInformer.HasSynced() && c.deploymentInformer.HasSynced() && c.pvInformer.HasSynced())
+func (sc *SitepodController) DeleteFunc(deleted interface{}) {
+	sc.EnqueueDelete(client.Sitepods().KeyOf(cur))
 }
 
-func (c *SitepodController) syncSitepod(key string) {
+func testSync(c *cc.Client, key string) error {
 
-	sitepodObjs, err := c.sitepodInformer.GetIndexer().ByIndex("uid", key)
+	sitepod, exists := c.Sitepods().MaybeGetByKey(key)
 
-	if err != nil {
-		glog.Errorf("Unexpected error Unable to get sitepod %s: %+v", key, err)
-		return
+	if !exists {
+		glog.Infof("Sitepod %s not longer available. Presume this has since been deleted", key)
+		return nil
 	}
 
-	if len(sitepodObjs) == 0 {
-		glog.Infof("Presuming sitepod %s has been deleted, skipping.", key)
-		return
-	}
-
-	sitepodObj, _ := conversion.NewCloner().DeepCopy(sitepodObjs[0])
-	sitepod := sitepodObj.(*v1.Sitepod)
 	sitepodKey := string(sitepod.UID)
-	sitepodName := sitepod.Name
+	_ = sitepodKey
 
-	hostname, err := os.Hostname()
+	defaultPvc := sitepod.Spec.VolumeClaims[0]
 
-	if err != nil {
-		glog.Errorf("Unable to get hostname")
-		panic(err)
+	pvClaim, exists := c.PVClaims().MaybeGetByKey(defaultPvc)
+
+	if !exists {
+		return DependentResourcesNotReady{"PVC does not yet exist."}
 	}
 
-	glog.Infof("Provisioning sitepod %s : %s : %s", sitepodKey, sitepodName, sitepod.Spec.DisplayName)
-
-	deploymentObj, err := c.deploymentInformer.GetIndexer().ByIndex("sitepod", sitepodKey)
-
-	if err != nil {
-		glog.Errorf("Unexpected error getting deployments for %s", sitepodName)
-		return
+	if len(pvClaim.Spec.VolumeName) == 0 {
+		return DependentResourcesNotReady{fmt.Sprintf("PVC %s is not yet bound to a PV", defaultPvc)}
 	}
 
-	var deployment *ext_api.Deployment
+	pv := c.PVs().GetByKey(pvClaim.Spec.VolumeName)
 
-	if len(deploymentObj) == 0 {
-		glog.Infof("No existing deployment found for sitepod %s", sitepodName)
-		deployment = &ext_api.Deployment{}
-		deployment.GenerateName = "sitepod-deployment-"
-	} else {
-		deploymentCloneObj, _ := conversion.NewCloner().DeepCopy(deploymentObj[0])
-		deployment = deploymentCloneObj.(*ext_api.Deployment)
-		glog.Infof("Using existing deployment %s for sitepod %s", deployment.GetName(), sitepodName)
+	isHostPath := pv.Spec.HostPath != nil
+	var pinnedHost string
+	if isHostPath {
+		if pinnedHost = pv.Annotations["sitepod.io/pinnedhost"]; len(pinnedHost) == 0 {
+			return DependentConfigNotValid{"No pinned host specified for host local storage"}
+		}
+	}
+
+	deployment, exists := c.Deployments().MaybeSingleBySitepodKey(sitepodKey)
+
+	if !exists {
+		//TODO change NewForSitepod(sitepodKey)
+		deployment = c.Deployments().NewEmpty()
 	}
 
 	labels := make(map[string]string)
 	labels["sitepod"] = sitepodKey
+
 	deployment.Spec.Replicas = 1
-	deployment.Spec.Selector = &unversioned.LabelSelector{MatchLabels: labels}
-	// TODO revisit single node restriction
-	deployment.Spec.Template.Spec.NodeName = hostname
-	if !(len(deployment.Spec.Template.Spec.Containers) > 1) {
-		deployment.Spec.Template.Spec.Containers = []k8s_api.Container{
-			k8s_api.Container{
-				Name:  "sitepod-alsosleepforever",
-				Image: "gcr.io/google_containers/pause:2.0",
-			},
-		}
+	///deployment.Spec.Selector = &unversioned.LabelSelector{MatchLabels: labels}
+
+	if isHostPath {
+		deployment.Spec.Template.Spec.NodeName = pinnedHost
 	}
+
+	smExists, _ := From(deployment.Spec.Template.Spec.Containers).Where(func(s T) (bool, error) {
+		return (s.(k8s_api.Container).Name == "sitepod-manager"), nil
+	}).Any()
+
+	if !smExists {
+		deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers,
+			k8s_api.Container{
+				Name:  "sitepod-manager",
+				Image: "gcr.io/google_containers/pause:2.0",
+			})
+	}
+
 	deployment.Spec.Template.GenerateName = "sitepod-pod-"
 	deployment.Spec.Template.Labels = labels
+	//TODO add labels don't replace
 	deployment.Labels = labels
 
-	_, err = c.deploymentUpdater(deployment)
+	c.Deployments().UpdateOrAdd(deployment)
 
-	if err != nil {
-		glog.Errorf("Requeue - Error adding/updating deployment for sitepod %s: %+v", sitepodName, err)
-		c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
-		return
-	}
-
-	pvObjs, err := c.pvInformer.GetIndexer().ByIndex("sitepod", sitepodKey)
-
-	if err != nil {
-		glog.Errorf("Unexpected error getting pvs for %s ", sitepodName)
-		return
-	}
-
-	var pv *k8s_api.PersistentVolume
-
-	if len(pvObjs) == 0 {
-		pv = &k8s_api.PersistentVolume{}
-		pv.Annotations = make(map[string]string)
-		pv.Annotations["must-provision"] = "true"
-	} else {
-		pvObj, _ := conversion.NewCloner().DeepCopy(pvObjs[0])
-		pv = pvObj.(*k8s_api.PersistentVolume)
-	}
-
-	sitepodDataRoot := "/var/sitepod"
-	sitepodDataPath := path.Join(sitepodDataRoot, string(sitepod.UID))
-
-	pv.GenerateName = "sitepod-pv-"
-	pv.Spec.AccessModes = []k8s_api.PersistentVolumeAccessMode{k8s_api.ReadWriteOnce}
-	pv.Spec.Capacity = make(k8s_api.ResourceList)
-	pv.Spec.Capacity[k8s_api.ResourceStorage] = resource.MustParse("1000M")
-	pv.Spec.HostPath = &k8s_api.HostPathVolumeSource{}
-	pv.Spec.HostPath.Path = sitepodDataPath
-	pv.Labels = make(map[string]string)
-	pv.Labels["sitepod"] = string(sitepod.UID)
-	pv.Labels["hostname"] = hostname
-
-	// TODO eventually must-provision to be handled by NodeJob resource type
-
-	pvObj, err := c.pvUpdater(pv)
-	if err != nil {
-		glog.Errorf("Error adding/updating new PV for sitepod %s: %s", sitepodName, err)
-		c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
-		return
-	}
-	pvClonedObj, _ := conversion.NewCloner().DeepCopy(pvObj)
-	pv = pvClonedObj.(*k8s_api.PersistentVolume)
-
-	if pv.Annotations["must-provision"] == "true" {
-
-		glog.Infof("Creating directory %s", sitepodDataPath)
-		err = os.MkdirAll(sitepodDataPath, 0700)
-		if err != nil {
-			glog.Errorf("Unable to create directory %s: %v", sitepodDataPath, err)
-			c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
-			return
-		}
-		//create home directory
-
-		err = os.MkdirAll(path.Join(sitepodDataPath, "home"), 0755)
-		if err != nil {
-			glog.Errorf("Unable to create home directory on %s: %v", sitepodDataPath, err)
-			c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
-			return
-		}
-
-		delete(pv.Annotations, "must-provision")
-		_, err = c.pvUpdater(pv)
-		if err != nil {
-			glog.Errorf("Error adding/updating new PV for sitepod %s: %s", sitepodName, err)
-			c.queue.AddAfter(processSitepodRequest{key}, RetryDelay)
-			return
-		}
-	}
-
-	glog.Infof("Provisioned PV %s", pv.Name)
-
-}
-
-func (c *SitepodController) deleteSitepod(key string) {
-
-	deploymentObjs, err := c.deploymentInformer.GetIndexer().ByIndex("sitepod", key)
-
-	for _, deploymentObj := range deploymentObjs {
-		doneDeployment := deploymentObj.(*ext_api.Deployment)
-		//err = c.deploymentDeleter(doneDeployment)
-		glog.Infof("Deleting deployment %s", doneDeployment.Name)
-		if doneDeployment.Spec.Replicas != 0 {
-			glog.Infof("Setting replicas to 0 for %s", doneDeployment.Name)
-			doneDeployment.Spec.Replicas = 0
-			_, err = c.deploymentUpdater(doneDeployment)
-			if err != nil {
-				glog.Errorf("Unable to set replicates to 0 on deployment: %+v", err)
-			}
-			c.queue.AddAfter(deleteSitepodRequest{key}, RetryDelay)
-			return
-		} else {
-			if doneDeployment.Status.Replicas != 0 {
-				// TODO use delayed workqueue
-				glog.Infof("Replicates not yet 0")
-				c.queue.AddAfter(deleteSitepodRequest{key}, RetryDelay)
-			} else {
-				glog.Infof("Replicates now yet 0")
-
-				err := c.deploymentDeleter(doneDeployment)
-				if err != nil {
-					glog.Errorf("Unable to delete deployment")
-					return
-				}
-
-				selector, err := unversioned.LabelSelectorAsSelector(doneDeployment.Spec.Selector)
-				//c.rsSet(labels.Newre
-				rsObjs, err := c.rsFilter(selector)
-				if err != nil {
-					glog.Errorf("Unable to get replica sets %v", err)
-					return
-				}
-
-				rsList := rsObjs.(*ext_api.ReplicaSetList)
-				for _, rsObj := range rsList.Items {
-					c.rsDeleter(&rsObj)
-				}
-
-			}
-		}
-
-	}
-	glog.Infof("Deleteing related system users")
-	req, err := labels.NewRequirement("sitepod", labels.EqualsOperator, sets.NewString(key))
-	if err != nil {
-		panic(err)
-	}
-	sitepodMatcher := labels.NewSelector().Add(*req)
-	//TODO: figure out where to host this list
-	sitepodResources := []string{"systemusers", "serviceinstances"}
-
-	for _, sitepodResource := range sitepodResources {
-		res := c.rc.Delete().Resource("systemusers").Namespace("default").LabelsSelectorParam(sitepodMatcher).Do()
-
-		if err = res.Error(); err != nil {
-			glog.Errorf("Unable to delete %s: %+v", sitepodResource, err)
-			c.queue.AddAfter(deleteSitepodRequest{key}, RetryDelay)
-		}
-	}
-}
-
-func (c *SitepodController) HasSynced() bool {
-	return c.sitepodInformer.GetController().HasSynced()
+	return nil
 }
