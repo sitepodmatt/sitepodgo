@@ -2,15 +2,19 @@ package client
 
 import (
 	"errors"
+	"fmt"
+	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/meta"
 	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
 	"sitepod.io/sitepod/pkg/api"
 	"sitepod.io/sitepod/pkg/api/v1"
+	"strings"
 	"time"
 )
 
@@ -21,7 +25,7 @@ var (
 func HackImportIgnoredPVClaimClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
-// template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName)
+// template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
 
 type PVClaimClient struct {
 	rc            *restclient.RESTClient
@@ -31,32 +35,82 @@ type PVClaimClient struct {
 }
 
 func NewPVClaimClient(rc *restclient.RESTClient, ns string) *PVClaimClient {
-	return &PVClaimClient{
+	c := &PVClaimClient{
 		rc:            rc,
-		ns:            ns,
 		supportedType: reflect.TypeOf(&k8s_api.PersistentVolumeClaim{}),
 	}
+
+	if true {
+		c.ns = ns
+	}
+
+	pc := runtime.NewParameterCodec(k8s_api.Scheme)
+
+	indexers := make(cache.Indexers)
+	indexers["sitepod"] = func(obj interface{}) ([]string, error) {
+		accessor, _ := meta.Accessor(obj)
+		labels := accessor.GetLabels()
+		if _, ok := labels["sitepod"]; ok {
+			return []string{labels["sitepod"]}, nil
+		} else {
+			return []string{}, nil
+		}
+	}
+	c.informer = framework.NewSharedIndexInformer(
+		api.NewListWatchFromClient(c.rc, "PersistentVolumeClaims", c.ns, nil, pc),
+		&k8s_api.PersistentVolumeClaim{},
+		resyncPeriodPVClaimClient,
+		indexers,
+	)
+
+	return c
 }
 
 func (c *PVClaimClient) StartInformer(stopCh <-chan struct{}) {
-	//TODO do we still need to do this now we have single scheme
-	pc := runtime.NewParameterCodec(k8s_api.Scheme)
-
-	c.informer = framework.NewSharedIndexInformer(
-		api.NewListWatchFromClient(c.rc, "x", c.ns, nil, pc),
-		&k8s_api.PersistentVolumeClaim{},
-		resyncPeriodPVClaimClient,
-		nil,
-	)
-
 	c.informer.Run(stopCh)
 }
 
+func (c *PVClaimClient) AddInformerHandlers(reh framework.ResourceEventHandler) {
+	if c.informer == nil {
+		panic(fmt.Sprintf("%s informer not started", "PersistentVolumeClaim"))
+	}
+
+	c.informer.AddEventHandler(reh)
+}
+
+func (c *PVClaimClient) HasSynced() bool {
+	if c.informer == nil {
+		return false
+	}
+	return c.informer.HasSynced()
+}
+
 func (c *PVClaimClient) NewEmpty() *k8s_api.PersistentVolumeClaim {
-	return &k8s_api.PersistentVolumeClaim{}
+	item := &k8s_api.PersistentVolumeClaim{}
+	item.GenerateName = "sitepod-pvc-"
+	return item
+}
+
+//TODO: wrong location? shared?
+func (c *PVClaimClient) KeyOf(obj interface{}) string {
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		panic(err)
+	}
+	return key
+}
+
+//TODO: wrong location? shared?
+func (c *PVClaimClient) DeepEqual(a interface{}, b interface{}) bool {
+	return k8s_api.Semantic.DeepEqual(a, b)
 }
 
 func (c *PVClaimClient) MaybeGetByKey(key string) (*k8s_api.PersistentVolumeClaim, bool) {
+
+	if !strings.Contains(key, "/") && true {
+		key = fmt.Sprintf("%s/%s", c.ns, key)
+	}
+
 	iObj, exists, err := c.informer.GetStore().GetByKey(key)
 
 	if err != nil {
@@ -66,7 +120,9 @@ func (c *PVClaimClient) MaybeGetByKey(key string) (*k8s_api.PersistentVolumeClai
 	if iObj == nil {
 		return nil, exists
 	} else {
-		return iObj.(*k8s_api.PersistentVolumeClaim), exists
+		item := iObj.(*k8s_api.PersistentVolumeClaim)
+		glog.Infof("Got %s from informer store with rv %s", "PersistentVolumeClaim", item.ResourceVersion)
+		return item, exists
 	}
 }
 
@@ -121,6 +177,11 @@ func (c *PVClaimClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.Per
 	if len(items) == 0 {
 		return nil, false
 	} else {
+
+		if len(items) > 1 {
+			glog.Warningf("Unexpected number of %s for sitepod %s - %d items matched", "PersistentVolumeClaims", sitepodKey, len(items))
+		}
+
 		return items[0], true
 	}
 
@@ -128,7 +189,12 @@ func (c *PVClaimClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.Per
 
 func (c *PVClaimClient) Add(target *k8s_api.PersistentVolumeClaim) *k8s_api.PersistentVolumeClaim {
 
-	result := c.rc.Post().Resource("PersistentVolumeClaim").Body(target).Do()
+	rcReq := c.rc.Post()
+	if true {
+		rcReq = rcReq.Namespace(c.ns)
+	}
+
+	result := rcReq.Resource("PersistentVolumeClaims").Body(target).Do()
 
 	if err := result.Error(); err != nil {
 		panic(err)
@@ -139,8 +205,9 @@ func (c *PVClaimClient) Add(target *k8s_api.PersistentVolumeClaim) *k8s_api.Pers
 	if err != nil {
 		panic(err)
 	}
-
-	return r.(*k8s_api.PersistentVolumeClaim)
+	item := r.(*k8s_api.PersistentVolumeClaim)
+	glog.Infof("Added %s - %s (rv: %s)", "PersistentVolumeClaim", item.Name, item.ResourceVersion)
+	return item
 }
 
 func (c *PVClaimClient) UpdateOrAdd(target *k8s_api.PersistentVolumeClaim) *k8s_api.PersistentVolumeClaim {
@@ -153,11 +220,17 @@ func (c *PVClaimClient) UpdateOrAdd(target *k8s_api.PersistentVolumeClaim) *k8s_
 	uid := accessor.GetUID()
 	if len(string(uid)) > 0 {
 		rName := accessor.GetName()
-		replacementTarget, err := c.rc.Put().Resource("PersistentVolumeClaim").Name(rName).Body(target).Do().Get()
+		rcReq := c.rc.Put()
+		if true {
+			rcReq = rcReq.Namespace(c.ns)
+		}
+		replacementTarget, err := rcReq.Resource("PersistentVolumeClaims").Name(rName).Body(target).Do().Get()
 		if err != nil {
 			panic(err)
 		}
-		return replacementTarget.(*k8s_api.PersistentVolumeClaim)
+		item := replacementTarget.(*k8s_api.PersistentVolumeClaim)
+		glog.Infof("Updated %s - %s (rv: %s)", "PersistentVolumeClaim", item.Name, item.ResourceVersion)
+		return item
 	} else {
 		return c.Add(target)
 	}

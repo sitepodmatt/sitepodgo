@@ -5,10 +5,10 @@ import (
 
 	"sitepod.io/sitepod/pkg/api/v1"
 	"sitepod.io/sitepod/pkg/client"
-	"sitepod.io/sitepod/pkg/controller/etc"
-	"sitepod.io/sitepod/pkg/controller/services"
+	//"sitepod.io/sitepod/pkg/controller/etc"
+	//"sitepod.io/sitepod/pkg/controller/services"
 	"sitepod.io/sitepod/pkg/controller/sitepod"
-	"sitepod.io/sitepod/pkg/controller/systemuser"
+	//	"sitepod.io/sitepod/pkg/controller/systemuser"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
@@ -83,9 +83,6 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 	}
 
 	cc := client.NewClient(api.Scheme)
-	if cc != nil {
-		panic(err)
-	}
 
 	//c.etcController = etc.NewEtcController(
 	//c.sitepodInformer,
@@ -108,6 +105,12 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 	c.sitepodController = sitepod.NewSitepodController(cc)
 	go c.sitepodController.Run(stopCh)
 
+	glog.Infof("Starting informers")
+	go cc.Sitepods().StartInformer(stopCh)
+	go cc.PVs().StartInformer(stopCh)
+	go cc.PVClaims().StartInformer(stopCh)
+	go cc.Deployments().StartInformer(stopCh)
+	glog.Infof("Started informers")
 	//c.systemUserController = systemuser.NewSystemUserController(c.sitepodInformer,
 	//c.systemUserInformer,
 	//c.pvInformer,
@@ -127,8 +130,8 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 	//go c.configMapInformer.Run(stopCh)
 
 	//glog.Info("Waiting to stop")
-	//<-stopCh
-	//glog.Info("Stopped")
+	<-stopCh
+	glog.Info("Stopped")
 }
 
 func (c *SingleNodeController) HasSynced() bool {

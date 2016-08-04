@@ -12,6 +12,9 @@ post() {
 
 echo "Creating sitepod"
 SITEPOD_OUTPUT=$(post <(yaml2json new-sitepod.yaml) "/apis/stable.sitepod.io/v1/namespaces/default/sitepods")
+exit
+
+
 echo $SITEPOD_OUTPUT
 SITEPOD_UID=$(echo -n "$SITEPOD_OUTPUT" | jq .metadata.uid)
 echo -e "$SITEPOD_UID"

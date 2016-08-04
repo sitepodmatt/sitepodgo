@@ -4,3 +4,5 @@ apiVersion: stable.sitepod.io/v1
 kind: Sitepod
 spec:
   displayName: "Acme web store"
+  volumeClaims: 
+    - "acme-pvclaim"

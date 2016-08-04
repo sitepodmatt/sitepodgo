@@ -3,6 +3,7 @@ package shared
 import (
 	//"github.com/golang/glog"
 
+	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 	cc "sitepod.io/sitepod/pkg/client"
 	"time"
@@ -17,7 +18,7 @@ type Syncer interface {
 }
 
 type SimpleController struct {
-	client           *cc.Client
+	Client           *cc.Client
 	waitForInformers []Syncer
 	SyncFunc         func(string) error
 	DeleteFunc       func(string) error
@@ -36,6 +37,15 @@ func (c *SimpleController) Run(stopCh <-chan struct{}) {
 	c.queue.ShutDown()
 }
 
+func (c *SimpleController) EnqueueUpdate(key string) {
+	glog.Infof("Enqueuing for update %s", key)
+	c.queue.Add(addUpdateRequest{key})
+}
+func (c *SimpleController) EnqueueDelete(key string) {
+	glog.Infof("Enqueuing for delete %s", key)
+	c.queue.Add(deleteRequest{key})
+}
+
 func (c *SimpleController) HasSynced() bool {
 	// TODO: What is this supposed to do for an aggregating controller?
 	return true
@@ -52,6 +62,7 @@ type deleteRequest struct {
 func (c *SimpleController) worker() {
 	c.WaitReady()
 
+	glog.Infof("Processing queue")
 	for {
 		func() {
 			item, quit := c.queue.Get()
@@ -63,10 +74,23 @@ func (c *SimpleController) worker() {
 			switch item.(type) {
 			case addUpdateRequest:
 				req := item.(addUpdateRequest)
+				glog.Infof("Processing update for %s", req.key)
 				if c.SyncFunc != nil {
-					c.SyncFunc(req.key)
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								glog.Errorf("Recovered in f %+v", r)
+							}
+						}()
+						err := c.SyncFunc(req.key)
+						if err != nil {
+							glog.Errorf("Rejected processing %s: %s", req.key, err)
+						}
+					}()
 				}
 			case deleteRequest:
+				req := item.(deleteRequest)
+				glog.Infof("Processing delete for %s", req.key)
 				//TODO process by key
 			default:
 			}
@@ -79,6 +103,7 @@ func (c *SimpleController) worker() {
 func (c *SimpleController) WaitReady() {
 	for {
 		allReady := true
+		glog.Infof("Waiting for dependencies to be ready")
 		for _, di := range c.waitForInformers {
 			if !di.HasSynced() {
 				allReady = false
@@ -86,6 +111,7 @@ func (c *SimpleController) WaitReady() {
 			}
 		}
 		if allReady {
+			glog.Infof("Dependencies all ready")
 			break
 		} else {
 			time.Sleep(RetryDelay)

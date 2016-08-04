@@ -2,15 +2,19 @@ package client
 
 import (
 	"errors"
+	"fmt"
+	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/meta"
 	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
 	"sitepod.io/sitepod/pkg/api"
 	"sitepod.io/sitepod/pkg/api/v1"
+	"strings"
 	"time"
 )
 
@@ -21,7 +25,7 @@ var (
 func HackImportIgnoredPVClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
-// template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName)
+// template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
 
 type PVClient struct {
 	rc            *restclient.RESTClient
@@ -31,32 +35,82 @@ type PVClient struct {
 }
 
 func NewPVClient(rc *restclient.RESTClient, ns string) *PVClient {
-	return &PVClient{
+	c := &PVClient{
 		rc:            rc,
-		ns:            ns,
 		supportedType: reflect.TypeOf(&k8s_api.PersistentVolume{}),
 	}
+
+	if false {
+		c.ns = ns
+	}
+
+	pc := runtime.NewParameterCodec(k8s_api.Scheme)
+
+	indexers := make(cache.Indexers)
+	indexers["sitepod"] = func(obj interface{}) ([]string, error) {
+		accessor, _ := meta.Accessor(obj)
+		labels := accessor.GetLabels()
+		if _, ok := labels["sitepod"]; ok {
+			return []string{labels["sitepod"]}, nil
+		} else {
+			return []string{}, nil
+		}
+	}
+	c.informer = framework.NewSharedIndexInformer(
+		api.NewListWatchFromClient(c.rc, "PersistentVolumes", c.ns, nil, pc),
+		&k8s_api.PersistentVolume{},
+		resyncPeriodPVClient,
+		indexers,
+	)
+
+	return c
 }
 
 func (c *PVClient) StartInformer(stopCh <-chan struct{}) {
-	//TODO do we still need to do this now we have single scheme
-	pc := runtime.NewParameterCodec(k8s_api.Scheme)
-
-	c.informer = framework.NewSharedIndexInformer(
-		api.NewListWatchFromClient(c.rc, "x", c.ns, nil, pc),
-		&k8s_api.PersistentVolume{},
-		resyncPeriodPVClient,
-		nil,
-	)
-
 	c.informer.Run(stopCh)
 }
 
+func (c *PVClient) AddInformerHandlers(reh framework.ResourceEventHandler) {
+	if c.informer == nil {
+		panic(fmt.Sprintf("%s informer not started", "PersistentVolume"))
+	}
+
+	c.informer.AddEventHandler(reh)
+}
+
+func (c *PVClient) HasSynced() bool {
+	if c.informer == nil {
+		return false
+	}
+	return c.informer.HasSynced()
+}
+
 func (c *PVClient) NewEmpty() *k8s_api.PersistentVolume {
-	return &k8s_api.PersistentVolume{}
+	item := &k8s_api.PersistentVolume{}
+	item.GenerateName = "sitepod-pv-"
+	return item
+}
+
+//TODO: wrong location? shared?
+func (c *PVClient) KeyOf(obj interface{}) string {
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		panic(err)
+	}
+	return key
+}
+
+//TODO: wrong location? shared?
+func (c *PVClient) DeepEqual(a interface{}, b interface{}) bool {
+	return k8s_api.Semantic.DeepEqual(a, b)
 }
 
 func (c *PVClient) MaybeGetByKey(key string) (*k8s_api.PersistentVolume, bool) {
+
+	if !strings.Contains(key, "/") && false {
+		key = fmt.Sprintf("%s/%s", c.ns, key)
+	}
+
 	iObj, exists, err := c.informer.GetStore().GetByKey(key)
 
 	if err != nil {
@@ -66,7 +120,9 @@ func (c *PVClient) MaybeGetByKey(key string) (*k8s_api.PersistentVolume, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		return iObj.(*k8s_api.PersistentVolume), exists
+		item := iObj.(*k8s_api.PersistentVolume)
+		glog.Infof("Got %s from informer store with rv %s", "PersistentVolume", item.ResourceVersion)
+		return item, exists
 	}
 }
 
@@ -121,6 +177,11 @@ func (c *PVClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.Persiste
 	if len(items) == 0 {
 		return nil, false
 	} else {
+
+		if len(items) > 1 {
+			glog.Warningf("Unexpected number of %s for sitepod %s - %d items matched", "PersistentVolumes", sitepodKey, len(items))
+		}
+
 		return items[0], true
 	}
 
@@ -128,7 +189,12 @@ func (c *PVClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.Persiste
 
 func (c *PVClient) Add(target *k8s_api.PersistentVolume) *k8s_api.PersistentVolume {
 
-	result := c.rc.Post().Resource("PersistentVolume").Body(target).Do()
+	rcReq := c.rc.Post()
+	if false {
+		rcReq = rcReq.Namespace(c.ns)
+	}
+
+	result := rcReq.Resource("PersistentVolumes").Body(target).Do()
 
 	if err := result.Error(); err != nil {
 		panic(err)
@@ -139,8 +205,9 @@ func (c *PVClient) Add(target *k8s_api.PersistentVolume) *k8s_api.PersistentVolu
 	if err != nil {
 		panic(err)
 	}
-
-	return r.(*k8s_api.PersistentVolume)
+	item := r.(*k8s_api.PersistentVolume)
+	glog.Infof("Added %s - %s (rv: %s)", "PersistentVolume", item.Name, item.ResourceVersion)
+	return item
 }
 
 func (c *PVClient) UpdateOrAdd(target *k8s_api.PersistentVolume) *k8s_api.PersistentVolume {
@@ -153,11 +220,17 @@ func (c *PVClient) UpdateOrAdd(target *k8s_api.PersistentVolume) *k8s_api.Persis
 	uid := accessor.GetUID()
 	if len(string(uid)) > 0 {
 		rName := accessor.GetName()
-		replacementTarget, err := c.rc.Put().Resource("PersistentVolume").Name(rName).Body(target).Do().Get()
+		rcReq := c.rc.Put()
+		if false {
+			rcReq = rcReq.Namespace(c.ns)
+		}
+		replacementTarget, err := rcReq.Resource("PersistentVolumes").Name(rName).Body(target).Do().Get()
 		if err != nil {
 			panic(err)
 		}
-		return replacementTarget.(*k8s_api.PersistentVolume)
+		item := replacementTarget.(*k8s_api.PersistentVolume)
+		glog.Infof("Updated %s - %s (rv: %s)", "PersistentVolume", item.Name, item.ResourceVersion)
+		return item
 	} else {
 		return c.Add(target)
 	}

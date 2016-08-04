@@ -7,6 +7,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/runtime/serializer"
+	"sync"
 )
 
 //TODO: inject as host configuration
@@ -21,18 +22,21 @@ type Client struct {
 	sitepodRestClient *restclient.RESTClient
 	k8sCoreRestClient *restclient.RESTClient
 	k8sExtRestClient  *restclient.RESTClient
+	cachedClients     map[string]interface{}
+	cachedClientMutex sync.Mutex
 }
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SitepodClient(v1.Sitepod,"Sitepod","Sitepods")
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SitepodClient(v1.Sitepod,"Sitepod","Sitepods",true,"sitepod-")
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClaimClient(k8s_api.PersistentVolumeClaim,"PersistentVolumeClaim","PersistentVolumeClaims")
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClaimClient(k8s_api.PersistentVolumeClaim,"PersistentVolumeClaim","PersistentVolumeClaims",true,"sitepod-pvc-")
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClient(k8s_api.PersistentVolume,"PersistentVolume","PersistentVolumes")
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClient(k8s_api.PersistentVolume,"PersistentVolume","PersistentVolumes",false,"sitepod-pv-")
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" DeploymentClient(ext_api.Deployment,"Deployment","Deployments")
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" DeploymentClient(ext_api.Deployment,"Deployment","Deployments",true,"sitepod-deployment-")
 
 func NewClient(scheme *runtime.Scheme) *Client {
 	client := &Client{scheme: scheme}
+	client.cachedClients = make(map[string]interface{})
 	client.serializer = serializer.NewCodecFactory(scheme)
 
 	sitepodGroupVersion := &unversioned.GroupVersion{"stable.sitepod.io", "v1"}
@@ -43,20 +47,30 @@ func NewClient(scheme *runtime.Scheme) *Client {
 	return client
 }
 
+func (c *Client) usingCache(key string, fn func() interface{}) interface{} {
+
+	c.cachedClientMutex.Lock()
+	if c.cachedClients[key] == nil {
+		c.cachedClients[key] = fn()
+	}
+	c.cachedClientMutex.Unlock()
+	return c.cachedClients[key]
+}
+
 func (c *Client) Sitepods() *SitepodClient {
-	return NewSitepodClient(c.sitepodRestClient, namespace)
+	return c.usingCache("sitepods", func() interface{} { return NewSitepodClient(c.sitepodRestClient, namespace) }).(*SitepodClient)
 }
 
 func (c *Client) PVClaims() *PVClaimClient {
-	return NewPVClaimClient(c.k8sCoreRestClient, namespace)
+	return c.usingCache("pvclaims", func() interface{} { return NewPVClaimClient(c.k8sCoreRestClient, namespace) }).(*PVClaimClient)
 }
 
 func (c *Client) PVs() *PVClient {
-	return NewPVClient(c.k8sCoreRestClient, namespace)
+	return c.usingCache("pvs", func() interface{} { return NewPVClient(c.k8sCoreRestClient, namespace) }).(*PVClient)
 }
 
 func (c *Client) Deployments() *DeploymentClient {
-	return NewDeploymentClient(c.k8sCoreRestClient, namespace)
+	return c.usingCache("deployments", func() interface{} { return NewDeploymentClient(c.k8sExtRestClient, namespace) }).(*DeploymentClient)
 }
 
 func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) *restclient.RESTClient {

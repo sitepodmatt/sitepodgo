@@ -12,41 +12,46 @@ import (
 	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/controller/framework"
-	"sitepod.io/sitepod/pkg/api/v1"
+	//"sitepod.io/sitepod/pkg/api/v1"
 	cc "sitepod.io/sitepod/pkg/client"
 	. "sitepod.io/sitepod/pkg/controller/shared"
 )
 
 type SitepodController struct {
-	*SimpleController
+	SimpleController
 }
 
 func NewSitepodController(client *cc.Client) framework.ControllerInterface {
 
-	sc := &SitepodController{NewSimpleController(client, []Syncer{}, nil, nil)}
+	glog.Infof("Creating sitepod controller")
+	sc := &SitepodController{*NewSimpleController(client, []Syncer{client.PVClaims(),
+		client.PVs(), client.Deployments()}, nil, nil)}
+	sc.SyncFunc = sc.ProcessUpdate
 	client.Sitepods().AddInformerHandlers(framework.ResourceEventHandlerFuncs{
-		AddFunc:    nil,
-		UpdateFunc: nil,
-		DeleteFunc,
+		AddFunc:    sc.AddFunc,
+		UpdateFunc: sc.UpdateFunc,
+		DeleteFunc: sc.DeleteFunc,
 	})
+	return sc
 }
 
 func (sc *SitepodController) AddFunc(item interface{}) {
-	sc.EnqueueUpdate(client.Sitepods().KeyOf(item))
+	sc.EnqueueUpdate(sc.Client.Sitepods().KeyOf(item))
 }
 
 func (sc *SitepodController) UpdateFunc(old interface{}, cur interface{}) {
-	if !client.Sitepods().DeepEqual(old, cur) {
-		sc.EnqueueUpdate(client.Sitepods().KeyOf(cur))
+	if !sc.Client.Sitepods().DeepEqual(old, cur) {
+		sc.EnqueueUpdate(sc.Client.Sitepods().KeyOf(cur))
 	}
 }
 
 func (sc *SitepodController) DeleteFunc(deleted interface{}) {
-	sc.EnqueueDelete(client.Sitepods().KeyOf(cur))
+	sc.EnqueueDelete(sc.Client.Sitepods().KeyOf(deleted))
 }
 
-func testSync(c *cc.Client, key string) error {
+func (sc *SitepodController) ProcessUpdate(key string) error {
 
+	c := sc.Client
 	sitepod, exists := c.Sitepods().MaybeGetByKey(key)
 
 	if !exists {
@@ -57,25 +62,32 @@ func testSync(c *cc.Client, key string) error {
 	sitepodKey := string(sitepod.UID)
 	_ = sitepodKey
 
+	if len(sitepod.Spec.VolumeClaims) == 0 {
+		glog.Infof("Sitepod %s does not have any volume claims in spec", key)
+		return nil
+	}
+
 	defaultPvc := sitepod.Spec.VolumeClaims[0]
+	glog.Infof("Using pvc %s for sitepod %s", defaultPvc, key)
 
 	pvClaim, exists := c.PVClaims().MaybeGetByKey(defaultPvc)
 
 	if !exists {
-		return DependentResourcesNotReady{"PVC does not yet exist."}
+		return DependentResourcesNotReady{fmt.Sprintf("PVC %s does not yet exist.", defaultPvc)}
 	}
 
 	if len(pvClaim.Spec.VolumeName) == 0 {
-		return DependentResourcesNotReady{fmt.Sprintf("PVC %s is not yet bound to a PV", defaultPvc)}
+		return DependentResourcesNotReady{fmt.Sprintf("PVC %s exists but is not yet bound to a PV", defaultPvc)}
 	}
 
 	pv := c.PVs().GetByKey(pvClaim.Spec.VolumeName)
+	glog.Infof("Using pv %s for sitepod %s", pv.GetName(), key)
 
 	isHostPath := pv.Spec.HostPath != nil
 	var pinnedHost string
 	if isHostPath {
-		if pinnedHost = pv.Annotations["sitepod.io/pinnedhost"]; len(pinnedHost) == 0 {
-			return DependentConfigNotValid{"No pinned host specified for host local storage"}
+		if pinnedHost = pv.Annotations["sitepod.io/pinned-host"]; len(pinnedHost) == 0 {
+			return DependentConfigNotValid{fmt.Sprintf("No pinned host specified for host local storage for pv %s", pv.GetName())}
 		}
 	}
 
@@ -84,6 +96,9 @@ func testSync(c *cc.Client, key string) error {
 	if !exists {
 		//TODO change NewForSitepod(sitepodKey)
 		deployment = c.Deployments().NewEmpty()
+		glog.Infof("Forging new deployment for sitepod %s", key)
+	} else {
+		glog.Infof("Using existing deployment %s for sitepod %s", deployment.GetName(), key)
 	}
 
 	labels := make(map[string]string)
@@ -93,6 +108,7 @@ func testSync(c *cc.Client, key string) error {
 	///deployment.Spec.Selector = &unversioned.LabelSelector{MatchLabels: labels}
 
 	if isHostPath {
+		glog.Infof("Setting pinned host %s on deployment %s", pinnedHost, deployment.GetName())
 		deployment.Spec.Template.Spec.NodeName = pinnedHost
 	}
 
@@ -113,7 +129,6 @@ func testSync(c *cc.Client, key string) error {
 	//TODO add labels don't replace
 	deployment.Labels = labels
 
-	c.Deployments().UpdateOrAdd(deployment)
-
+	deployment = c.Deployments().UpdateOrAdd(deployment)
 	return nil
 }
