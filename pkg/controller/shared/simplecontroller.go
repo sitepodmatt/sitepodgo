@@ -4,6 +4,7 @@ import (
 	//"github.com/golang/glog"
 
 	"github.com/golang/glog"
+	kerrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 	cc "sitepod.io/sitepod/pkg/client"
 	"time"
@@ -71,30 +72,38 @@ func (c *SimpleController) worker() {
 			}
 			defer c.queue.Done(item)
 
-			switch item.(type) {
-			case addUpdateRequest:
-				req := item.(addUpdateRequest)
-				glog.Infof("Processing update for %s", req.key)
-				if c.SyncFunc != nil {
-					func() {
-						defer func() {
-							if r := recover(); r != nil {
-								glog.Errorf("Recovered in f %+v", r)
+			func() {
+
+				defer func() {
+					if r := recover(); r != nil {
+						if errResult, ok := r.(*kerrors.StatusError); ok {
+							if errResult.ErrStatus.Reason == "Conflict" {
+								glog.Infof("Due to conflict requeueing %+v", item)
+								c.queue.AddAfter(item, RetryDelay)
 							}
-						}()
+						}
+						glog.Errorf("Panic processing %+v: %+v", item, r)
+					}
+				}()
+
+				switch item.(type) {
+				case addUpdateRequest:
+					req := item.(addUpdateRequest)
+					glog.Infof("Processing update for %s", req.key)
+					if c.SyncFunc != nil {
 						err := c.SyncFunc(req.key)
 						if err != nil {
 							glog.Errorf("Rejected processing %s: %s", req.key, err)
 						}
-					}()
+					}
+				case deleteRequest:
+					req := item.(deleteRequest)
+					glog.Infof("Processing delete for %s", req.key)
+					//TODO process by key
+				default:
 				}
-			case deleteRequest:
-				req := item.(deleteRequest)
-				glog.Infof("Processing delete for %s", req.key)
-				//TODO process by key
-			default:
-			}
 
+			}()
 		}()
 
 	}

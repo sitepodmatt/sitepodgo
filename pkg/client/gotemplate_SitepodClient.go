@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
+	kerrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/meta"
 	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/cache"
@@ -226,6 +227,9 @@ func (c *SitepodClient) UpdateOrAdd(target *v1.Sitepod) *v1.Sitepod {
 		}
 		replacementTarget, err := rcReq.Resource("Sitepods").Name(rName).Body(target).Do().Get()
 		if err != nil {
+			glog.Errorf("Type of error: %+v : %s", err, reflect.TypeOf(err))
+			errResult := err.(*kerrors.StatusError)
+			glog.Errorf("Status code: %s ", errResult.ErrStatus.Reason)
 			panic(err)
 		}
 		item := replacementTarget.(*v1.Sitepod)
