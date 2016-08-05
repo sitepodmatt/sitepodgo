@@ -93,7 +93,12 @@ func (c *SimpleController) worker() {
 					if c.SyncFunc != nil {
 						err := c.SyncFunc(req.key)
 						if err != nil {
-							glog.Errorf("Rejected processing %s: %s", req.key, err)
+							if retryable, ok := err.(Retryable); ok && retryable.Retry() {
+								glog.Infof("Queueing for retry %+v due to %s", item, err)
+								c.queue.AddAfter(item, RetryDelay)
+							} else {
+								glog.Errorf("Rejected processing %s: %s", req.key, err)
+							}
 						}
 					}
 				case deleteRequest:
@@ -126,6 +131,22 @@ func (c *SimpleController) WaitReady() {
 			time.Sleep(RetryDelay)
 		}
 	}
+}
+
+type Retryable interface {
+	Retry() bool
+}
+
+type ConditionsNotReady struct {
+	Message string
+}
+
+func (e ConditionsNotReady) Error() string {
+	return e.Message
+}
+
+func (e ConditionsNotReady) Retry() bool {
+	return true
 }
 
 type DependentResourcesNotReady struct {

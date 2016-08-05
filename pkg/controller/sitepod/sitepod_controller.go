@@ -64,8 +64,7 @@ func (sc *SitepodController) ProcessUpdate(key string) error {
 	_ = sitepodKey
 
 	if len(sitepod.Spec.VolumeClaims) == 0 {
-		glog.Infof("Sitepod %s does not have any volume claims in spec", key)
-		return nil
+		return DependentResourcesNotReady{fmt.Sprintf("Sitepod %s does not have any volume claims in spec", key)}
 	}
 
 	defaultPvc := sitepod.Spec.VolumeClaims[0]
@@ -150,11 +149,11 @@ func (sc *SitepodController) ProcessDelete(key string) error {
 			glog.Infof("Setting replicas to 0 for %s", deployment.Name)
 			deployment.Spec.Replicas = 0
 			c.Deployments().Update(deployment)
-			return nil
+			return ConditionsNotReady{"Set spec.replicas to zero"}
 		}
 
 		if deployment.Status.Replicas != 0 {
-			return nil
+			return ConditionsNotReady{"Not zero status.replicas"}
 		}
 
 		c.Deployments().Delete(deployment)
@@ -164,6 +163,8 @@ func (sc *SitepodController) ProcessDelete(key string) error {
 		replicaSets := c.ReplicaSets().FetchList(selector)
 
 		for _, replicaSet := range replicaSets {
+			glog.Infof("Deleting %s of deployment %s, of deleted sitepod %s",
+				replicaSet.GetName(), deployment.GetName(), key)
 			c.ReplicaSets().Delete(replicaSet)
 		}
 
