@@ -59,6 +59,12 @@ func NewSitepodClient(rc *restclient.RESTClient, ns string) *SitepodClient {
 			return []string{}, nil
 		}
 	}
+
+	indexers["uid"] = func(obj interface{}) ([]string, error) {
+		accessor, _ := meta.Accessor(obj)
+		return []string{string(accessor.GetUID())}, nil
+	}
+
 	c.informer = framework.NewSharedIndexInformer(
 		api.NewListWatchFromClient(c.rc, "Sitepods", c.ns, nil, pc),
 		&v1.Sitepod{},
@@ -139,8 +145,9 @@ func (c *SitepodClient) GetByKey(key string) *v1.Sitepod {
 	return item
 }
 
-func (c *SitepodClient) BySitepodKey(sitepodKey string) []*v1.Sitepod {
-	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
+func (c *SitepodClient) ByIndexByKey(index string, key string) []*v1.Sitepod {
+
+	items, err := c.informer.GetIndexer().ByIndex(index, key)
 
 	if err != nil {
 		panic(err)
@@ -151,6 +158,19 @@ func (c *SitepodClient) BySitepodKey(sitepodKey string) []*v1.Sitepod {
 		typedItems = append(typedItems, item.(*v1.Sitepod))
 	}
 	return typedItems
+}
+
+func (c *SitepodClient) BySitepodKey(sitepodKey string) []*v1.Sitepod {
+	return c.ByIndexByKey("sitepod", sitepodKey)
+}
+
+func (c *SitepodClient) MaybeSingleByUID(uid string) (*v1.Sitepod, bool) {
+	items := c.ByIndexByKey("uid", uid)
+	if len(items) == 0 {
+		return nil, false
+	} else {
+		return items[0], true
+	}
 }
 
 func (c *SitepodClient) SingleBySitepodKey(sitepodKey string) *v1.Sitepod {
@@ -236,7 +256,7 @@ func (c *SitepodClient) UpdateOrAdd(target *v1.Sitepod) *v1.Sitepod {
 func (c *SitepodClient) FetchList(s labels.Selector) []*v1.Sitepod {
 
 	var prc *restclient.Request
-	if c.ns == "" {
+	if !true {
 		prc = c.rc.Get().Resource("Sitepods").LabelsSelectorParam(s)
 	} else {
 		prc = c.rc.Get().Resource("Sitepods").Namespace(c.ns).LabelsSelectorParam(s)
@@ -257,10 +277,33 @@ func (c *SitepodClient) FetchList(s labels.Selector) []*v1.Sitepod {
 	return target
 }
 
+func (c *SitepodClient) TryDelete(target *v1.Sitepod) error {
+
+	var prc *restclient.Request
+	if !true {
+		prc = c.rc.Delete().Resource("Sitepods").Name(target.Name)
+	} else {
+		prc = c.rc.Delete().Namespace(c.ns).Resource("Sitepods").Name(target.Name)
+	}
+
+	err := prc.Do().Error()
+	return err
+}
+
 func (c *SitepodClient) Delete(target *v1.Sitepod) {
 
-	err := c.rc.Delete().Name(target.Name).Do().Error()
+	err := c.TryDelete(target)
+
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (c *SitepodClient) List() []*v1.Sitepod {
+	kItems := c.informer.GetStore().List()
+	target := []*v1.Sitepod{}
+	for _, kItem := range kItems {
+		target = append(target, kItem.(*v1.Sitepod))
+	}
+	return target
 }

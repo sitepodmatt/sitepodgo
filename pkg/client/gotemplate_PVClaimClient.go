@@ -59,6 +59,12 @@ func NewPVClaimClient(rc *restclient.RESTClient, ns string) *PVClaimClient {
 			return []string{}, nil
 		}
 	}
+
+	indexers["uid"] = func(obj interface{}) ([]string, error) {
+		accessor, _ := meta.Accessor(obj)
+		return []string{string(accessor.GetUID())}, nil
+	}
+
 	c.informer = framework.NewSharedIndexInformer(
 		api.NewListWatchFromClient(c.rc, "PersistentVolumeClaims", c.ns, nil, pc),
 		&k8s_api.PersistentVolumeClaim{},
@@ -139,8 +145,9 @@ func (c *PVClaimClient) GetByKey(key string) *k8s_api.PersistentVolumeClaim {
 	return item
 }
 
-func (c *PVClaimClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVolumeClaim {
-	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
+func (c *PVClaimClient) ByIndexByKey(index string, key string) []*k8s_api.PersistentVolumeClaim {
+
+	items, err := c.informer.GetIndexer().ByIndex(index, key)
 
 	if err != nil {
 		panic(err)
@@ -151,6 +158,19 @@ func (c *PVClaimClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVol
 		typedItems = append(typedItems, item.(*k8s_api.PersistentVolumeClaim))
 	}
 	return typedItems
+}
+
+func (c *PVClaimClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVolumeClaim {
+	return c.ByIndexByKey("sitepod", sitepodKey)
+}
+
+func (c *PVClaimClient) MaybeSingleByUID(uid string) (*k8s_api.PersistentVolumeClaim, bool) {
+	items := c.ByIndexByKey("uid", uid)
+	if len(items) == 0 {
+		return nil, false
+	} else {
+		return items[0], true
+	}
 }
 
 func (c *PVClaimClient) SingleBySitepodKey(sitepodKey string) *k8s_api.PersistentVolumeClaim {
@@ -236,7 +256,7 @@ func (c *PVClaimClient) UpdateOrAdd(target *k8s_api.PersistentVolumeClaim) *k8s_
 func (c *PVClaimClient) FetchList(s labels.Selector) []*k8s_api.PersistentVolumeClaim {
 
 	var prc *restclient.Request
-	if c.ns == "" {
+	if !true {
 		prc = c.rc.Get().Resource("PersistentVolumeClaims").LabelsSelectorParam(s)
 	} else {
 		prc = c.rc.Get().Resource("PersistentVolumeClaims").Namespace(c.ns).LabelsSelectorParam(s)
@@ -257,10 +277,33 @@ func (c *PVClaimClient) FetchList(s labels.Selector) []*k8s_api.PersistentVolume
 	return target
 }
 
+func (c *PVClaimClient) TryDelete(target *k8s_api.PersistentVolumeClaim) error {
+
+	var prc *restclient.Request
+	if !true {
+		prc = c.rc.Delete().Resource("PersistentVolumeClaims").Name(target.Name)
+	} else {
+		prc = c.rc.Delete().Namespace(c.ns).Resource("PersistentVolumeClaims").Name(target.Name)
+	}
+
+	err := prc.Do().Error()
+	return err
+}
+
 func (c *PVClaimClient) Delete(target *k8s_api.PersistentVolumeClaim) {
 
-	err := c.rc.Delete().Name(target.Name).Do().Error()
+	err := c.TryDelete(target)
+
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (c *PVClaimClient) List() []*k8s_api.PersistentVolumeClaim {
+	kItems := c.informer.GetStore().List()
+	target := []*k8s_api.PersistentVolumeClaim{}
+	for _, kItem := range kItems {
+		target = append(target, kItem.(*k8s_api.PersistentVolumeClaim))
+	}
+	return target
 }

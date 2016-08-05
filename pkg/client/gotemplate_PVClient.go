@@ -59,6 +59,12 @@ func NewPVClient(rc *restclient.RESTClient, ns string) *PVClient {
 			return []string{}, nil
 		}
 	}
+
+	indexers["uid"] = func(obj interface{}) ([]string, error) {
+		accessor, _ := meta.Accessor(obj)
+		return []string{string(accessor.GetUID())}, nil
+	}
+
 	c.informer = framework.NewSharedIndexInformer(
 		api.NewListWatchFromClient(c.rc, "PersistentVolumes", c.ns, nil, pc),
 		&k8s_api.PersistentVolume{},
@@ -139,8 +145,9 @@ func (c *PVClient) GetByKey(key string) *k8s_api.PersistentVolume {
 	return item
 }
 
-func (c *PVClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVolume {
-	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
+func (c *PVClient) ByIndexByKey(index string, key string) []*k8s_api.PersistentVolume {
+
+	items, err := c.informer.GetIndexer().ByIndex(index, key)
 
 	if err != nil {
 		panic(err)
@@ -151,6 +158,19 @@ func (c *PVClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVolume {
 		typedItems = append(typedItems, item.(*k8s_api.PersistentVolume))
 	}
 	return typedItems
+}
+
+func (c *PVClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVolume {
+	return c.ByIndexByKey("sitepod", sitepodKey)
+}
+
+func (c *PVClient) MaybeSingleByUID(uid string) (*k8s_api.PersistentVolume, bool) {
+	items := c.ByIndexByKey("uid", uid)
+	if len(items) == 0 {
+		return nil, false
+	} else {
+		return items[0], true
+	}
 }
 
 func (c *PVClient) SingleBySitepodKey(sitepodKey string) *k8s_api.PersistentVolume {
@@ -236,7 +256,7 @@ func (c *PVClient) UpdateOrAdd(target *k8s_api.PersistentVolume) *k8s_api.Persis
 func (c *PVClient) FetchList(s labels.Selector) []*k8s_api.PersistentVolume {
 
 	var prc *restclient.Request
-	if c.ns == "" {
+	if !false {
 		prc = c.rc.Get().Resource("PersistentVolumes").LabelsSelectorParam(s)
 	} else {
 		prc = c.rc.Get().Resource("PersistentVolumes").Namespace(c.ns).LabelsSelectorParam(s)
@@ -257,10 +277,33 @@ func (c *PVClient) FetchList(s labels.Selector) []*k8s_api.PersistentVolume {
 	return target
 }
 
+func (c *PVClient) TryDelete(target *k8s_api.PersistentVolume) error {
+
+	var prc *restclient.Request
+	if !false {
+		prc = c.rc.Delete().Resource("PersistentVolumes").Name(target.Name)
+	} else {
+		prc = c.rc.Delete().Namespace(c.ns).Resource("PersistentVolumes").Name(target.Name)
+	}
+
+	err := prc.Do().Error()
+	return err
+}
+
 func (c *PVClient) Delete(target *k8s_api.PersistentVolume) {
 
-	err := c.rc.Delete().Name(target.Name).Do().Error()
+	err := c.TryDelete(target)
+
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (c *PVClient) List() []*k8s_api.PersistentVolume {
+	kItems := c.informer.GetStore().List()
+	target := []*k8s_api.PersistentVolume{}
+	for _, kItem := range kItems {
+		target = append(target, kItem.(*k8s_api.PersistentVolume))
+	}
+	return target
 }

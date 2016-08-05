@@ -59,6 +59,12 @@ func NewDeploymentClient(rc *restclient.RESTClient, ns string) *DeploymentClient
 			return []string{}, nil
 		}
 	}
+
+	indexers["uid"] = func(obj interface{}) ([]string, error) {
+		accessor, _ := meta.Accessor(obj)
+		return []string{string(accessor.GetUID())}, nil
+	}
+
 	c.informer = framework.NewSharedIndexInformer(
 		api.NewListWatchFromClient(c.rc, "Deployments", c.ns, nil, pc),
 		&ext_api.Deployment{},
@@ -139,8 +145,9 @@ func (c *DeploymentClient) GetByKey(key string) *ext_api.Deployment {
 	return item
 }
 
-func (c *DeploymentClient) BySitepodKey(sitepodKey string) []*ext_api.Deployment {
-	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
+func (c *DeploymentClient) ByIndexByKey(index string, key string) []*ext_api.Deployment {
+
+	items, err := c.informer.GetIndexer().ByIndex(index, key)
 
 	if err != nil {
 		panic(err)
@@ -151,6 +158,19 @@ func (c *DeploymentClient) BySitepodKey(sitepodKey string) []*ext_api.Deployment
 		typedItems = append(typedItems, item.(*ext_api.Deployment))
 	}
 	return typedItems
+}
+
+func (c *DeploymentClient) BySitepodKey(sitepodKey string) []*ext_api.Deployment {
+	return c.ByIndexByKey("sitepod", sitepodKey)
+}
+
+func (c *DeploymentClient) MaybeSingleByUID(uid string) (*ext_api.Deployment, bool) {
+	items := c.ByIndexByKey("uid", uid)
+	if len(items) == 0 {
+		return nil, false
+	} else {
+		return items[0], true
+	}
 }
 
 func (c *DeploymentClient) SingleBySitepodKey(sitepodKey string) *ext_api.Deployment {
@@ -236,7 +256,7 @@ func (c *DeploymentClient) UpdateOrAdd(target *ext_api.Deployment) *ext_api.Depl
 func (c *DeploymentClient) FetchList(s labels.Selector) []*ext_api.Deployment {
 
 	var prc *restclient.Request
-	if c.ns == "" {
+	if !true {
 		prc = c.rc.Get().Resource("Deployments").LabelsSelectorParam(s)
 	} else {
 		prc = c.rc.Get().Resource("Deployments").Namespace(c.ns).LabelsSelectorParam(s)
@@ -257,10 +277,33 @@ func (c *DeploymentClient) FetchList(s labels.Selector) []*ext_api.Deployment {
 	return target
 }
 
+func (c *DeploymentClient) TryDelete(target *ext_api.Deployment) error {
+
+	var prc *restclient.Request
+	if !true {
+		prc = c.rc.Delete().Resource("Deployments").Name(target.Name)
+	} else {
+		prc = c.rc.Delete().Namespace(c.ns).Resource("Deployments").Name(target.Name)
+	}
+
+	err := prc.Do().Error()
+	return err
+}
+
 func (c *DeploymentClient) Delete(target *ext_api.Deployment) {
 
-	err := c.rc.Delete().Name(target.Name).Do().Error()
+	err := c.TryDelete(target)
+
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (c *DeploymentClient) List() []*ext_api.Deployment {
+	kItems := c.informer.GetStore().List()
+	target := []*ext_api.Deployment{}
+	for _, kItem := range kItems {
+		target = append(target, kItem.(*ext_api.Deployment))
+	}
+	return target
 }

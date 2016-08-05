@@ -68,6 +68,12 @@ func NewClientTmpl(rc *restclient.RESTClient, ns string) *ClientTmpl {
 			return []string{}, nil
 		}
 	}
+
+	indexers["uid"] = func(obj interface{}) ([]string, error) {
+		accessor, _ := meta.Accessor(obj)
+		return []string{string(accessor.GetUID())}, nil
+	}
+
 	c.informer = framework.NewSharedIndexInformer(
 		api.NewListWatchFromClient(c.rc, ResourcePluralName, c.ns, nil, pc),
 		&ResourceType{},
@@ -148,8 +154,9 @@ func (c *ClientTmpl) GetByKey(key string) *ResourceType {
 	return item
 }
 
-func (c *ClientTmpl) BySitepodKey(sitepodKey string) []*ResourceType {
-	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
+func (c *ClientTmpl) ByIndexByKey(index string, key string) []*ResourceType {
+
+	items, err := c.informer.GetIndexer().ByIndex(index, key)
 
 	if err != nil {
 		panic(err)
@@ -160,6 +167,19 @@ func (c *ClientTmpl) BySitepodKey(sitepodKey string) []*ResourceType {
 		typedItems = append(typedItems, item.(*ResourceType))
 	}
 	return typedItems
+}
+
+func (c *ClientTmpl) BySitepodKey(sitepodKey string) []*ResourceType {
+	return c.ByIndexByKey("sitepod", sitepodKey)
+}
+
+func (c *ClientTmpl) MaybeSingleByUID(uid string) (*ResourceType, bool) {
+	items := c.ByIndexByKey("uid", uid)
+	if len(items) == 0 {
+		return nil, false
+	} else {
+		return items[0], true
+	}
 }
 
 func (c *ClientTmpl) SingleBySitepodKey(sitepodKey string) *ResourceType {
@@ -245,7 +265,7 @@ func (c *ClientTmpl) UpdateOrAdd(target *ResourceType) *ResourceType {
 func (c *ClientTmpl) FetchList(s labels.Selector) []*ResourceType {
 
 	var prc *restclient.Request
-	if c.ns == "" {
+	if !Namespaced {
 		prc = c.rc.Get().Resource(ResourcePluralName).LabelsSelectorParam(s)
 	} else {
 		prc = c.rc.Get().Resource(ResourcePluralName).Namespace(c.ns).LabelsSelectorParam(s)
@@ -266,10 +286,33 @@ func (c *ClientTmpl) FetchList(s labels.Selector) []*ResourceType {
 	return target
 }
 
+func (c *ClientTmpl) TryDelete(target *ResourceType) error {
+
+	var prc *restclient.Request
+	if !Namespaced {
+		prc = c.rc.Delete().Resource(ResourcePluralName).Name(target.Name)
+	} else {
+		prc = c.rc.Delete().Namespace(c.ns).Resource(ResourcePluralName).Name(target.Name)
+	}
+
+	err := prc.Do().Error()
+	return err
+}
+
 func (c *ClientTmpl) Delete(target *ResourceType) {
 
-	err := c.rc.Delete().Name(target.Name).Do().Error()
+	err := c.TryDelete(target)
+
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (c *ClientTmpl) List() []*ResourceType {
+	kItems := c.informer.GetStore().List()
+	target := []*ResourceType{}
+	for _, kItem := range kItems {
+		target = append(target, kItem.(*ResourceType))
+	}
+	return target
 }

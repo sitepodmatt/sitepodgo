@@ -3,5 +3,5 @@
 BUILDDIR=${1-cmd/sitepod-cm}
 echo "Building in directory $BUILDDIR"
 (cd $BUILDDIR
-go build)
+go build -i)
 

@@ -59,6 +59,12 @@ func NewReplicaSetClient(rc *restclient.RESTClient, ns string) *ReplicaSetClient
 			return []string{}, nil
 		}
 	}
+
+	indexers["uid"] = func(obj interface{}) ([]string, error) {
+		accessor, _ := meta.Accessor(obj)
+		return []string{string(accessor.GetUID())}, nil
+	}
+
 	c.informer = framework.NewSharedIndexInformer(
 		api.NewListWatchFromClient(c.rc, "ReplicaSets", c.ns, nil, pc),
 		&ext_api.ReplicaSet{},
@@ -139,8 +145,9 @@ func (c *ReplicaSetClient) GetByKey(key string) *ext_api.ReplicaSet {
 	return item
 }
 
-func (c *ReplicaSetClient) BySitepodKey(sitepodKey string) []*ext_api.ReplicaSet {
-	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
+func (c *ReplicaSetClient) ByIndexByKey(index string, key string) []*ext_api.ReplicaSet {
+
+	items, err := c.informer.GetIndexer().ByIndex(index, key)
 
 	if err != nil {
 		panic(err)
@@ -151,6 +158,19 @@ func (c *ReplicaSetClient) BySitepodKey(sitepodKey string) []*ext_api.ReplicaSet
 		typedItems = append(typedItems, item.(*ext_api.ReplicaSet))
 	}
 	return typedItems
+}
+
+func (c *ReplicaSetClient) BySitepodKey(sitepodKey string) []*ext_api.ReplicaSet {
+	return c.ByIndexByKey("sitepod", sitepodKey)
+}
+
+func (c *ReplicaSetClient) MaybeSingleByUID(uid string) (*ext_api.ReplicaSet, bool) {
+	items := c.ByIndexByKey("uid", uid)
+	if len(items) == 0 {
+		return nil, false
+	} else {
+		return items[0], true
+	}
 }
 
 func (c *ReplicaSetClient) SingleBySitepodKey(sitepodKey string) *ext_api.ReplicaSet {
@@ -236,7 +256,7 @@ func (c *ReplicaSetClient) UpdateOrAdd(target *ext_api.ReplicaSet) *ext_api.Repl
 func (c *ReplicaSetClient) FetchList(s labels.Selector) []*ext_api.ReplicaSet {
 
 	var prc *restclient.Request
-	if c.ns == "" {
+	if !true {
 		prc = c.rc.Get().Resource("ReplicaSets").LabelsSelectorParam(s)
 	} else {
 		prc = c.rc.Get().Resource("ReplicaSets").Namespace(c.ns).LabelsSelectorParam(s)
@@ -257,10 +277,33 @@ func (c *ReplicaSetClient) FetchList(s labels.Selector) []*ext_api.ReplicaSet {
 	return target
 }
 
+func (c *ReplicaSetClient) TryDelete(target *ext_api.ReplicaSet) error {
+
+	var prc *restclient.Request
+	if !true {
+		prc = c.rc.Delete().Resource("ReplicaSets").Name(target.Name)
+	} else {
+		prc = c.rc.Delete().Namespace(c.ns).Resource("ReplicaSets").Name(target.Name)
+	}
+
+	err := prc.Do().Error()
+	return err
+}
+
 func (c *ReplicaSetClient) Delete(target *ext_api.ReplicaSet) {
 
-	err := c.rc.Delete().Name(target.Name).Do().Error()
+	err := c.TryDelete(target)
+
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (c *ReplicaSetClient) List() []*ext_api.ReplicaSet {
+	kItems := c.informer.GetStore().List()
+	target := []*ext_api.ReplicaSet{}
+	for _, kItem := range kItems {
+		target = append(target, kItem.(*ext_api.ReplicaSet))
+	}
+	return target
 }
