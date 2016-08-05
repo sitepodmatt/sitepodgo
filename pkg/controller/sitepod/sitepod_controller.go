@@ -28,25 +28,26 @@ func NewSitepodController(client *cc.Client) framework.ControllerInterface {
 	sc := &SitepodController{*NewSimpleController(client, []Syncer{client.PVClaims(),
 		client.PVs(), client.Deployments()}, nil, nil)}
 	sc.SyncFunc = sc.ProcessUpdate
+	sc.DeleteFunc = sc.ProcessDelete
 	client.Sitepods().AddInformerHandlers(framework.ResourceEventHandlerFuncs{
-		AddFunc:    sc.AddFunc,
-		UpdateFunc: sc.UpdateFunc,
-		DeleteFunc: sc.DeleteFunc,
+		AddFunc:    sc.QueueAdd,
+		UpdateFunc: sc.QueueUpdate,
+		DeleteFunc: sc.QueueDelete,
 	})
 	return sc
 }
 
-func (sc *SitepodController) AddFunc(item interface{}) {
+func (sc *SitepodController) QueueAdd(item interface{}) {
 	sc.EnqueueUpdate(sc.Client.Sitepods().KeyOf(item))
 }
 
-func (sc *SitepodController) UpdateFunc(old interface{}, cur interface{}) {
+func (sc *SitepodController) QueueUpdate(old interface{}, cur interface{}) {
 	if !sc.Client.Sitepods().DeepEqual(old, cur) {
 		sc.EnqueueUpdate(sc.Client.Sitepods().KeyOf(cur))
 	}
 }
 
-func (sc *SitepodController) DeleteFunc(deleted interface{}) {
+func (sc *SitepodController) QueueDelete(deleted interface{}) {
 	sc.EnqueueDelete(sc.Client.Sitepods().KeyOf(deleted))
 }
 

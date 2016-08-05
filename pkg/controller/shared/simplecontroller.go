@@ -86,26 +86,35 @@ func (c *SimpleController) worker() {
 					}
 				}()
 
+				var err error
 				switch item.(type) {
 				case addUpdateRequest:
 					req := item.(addUpdateRequest)
 					glog.Infof("Processing update for %s", req.key)
 					if c.SyncFunc != nil {
-						err := c.SyncFunc(req.key)
-						if err != nil {
-							if retryable, ok := err.(Retryable); ok && retryable.Retry() {
-								glog.Infof("Queueing for retry %+v due to %s", item, err)
-								c.queue.AddAfter(item, RetryDelay)
-							} else {
-								glog.Errorf("Rejected processing %s: %s", req.key, err)
-							}
-						}
+						err = c.SyncFunc(req.key)
+					} else {
+						glog.Infof("No sync function for controller")
 					}
 				case deleteRequest:
 					req := item.(deleteRequest)
 					glog.Infof("Processing delete for %s", req.key)
-					//TODO process by key
+					if c.DeleteFunc != nil {
+						err = c.DeleteFunc(req.key)
+					} else {
+						glog.Infof("No delete function for controller")
+					}
 				default:
+				}
+				if err != nil {
+					if retryable, ok := err.(Retryable); ok && retryable.Retry() {
+						glog.Infof("Queueing for retry %+v due to %s", item, err)
+						c.queue.AddAfter(item, RetryDelay)
+					} else {
+						glog.Errorf("Rejected processing %+v: %s", item, err)
+					}
+				} else {
+					glog.Infof("Completed %+v", item)
 				}
 
 			}()
@@ -164,70 +173,3 @@ type DependentConfigNotValid struct {
 func (e DependentConfigNotValid) Error() string {
 	return e.Message
 }
-
-//func (c *SitepodController) deleteSitepod(key string) {
-
-//deploymentObjs, err := c.deploymentInformer.GetIndexer().ByIndex("sitepod", key)
-
-//for _, deploymentObj := range deploymentObjs {
-//doneDeployment := deploymentObj.(*ext_api.Deployment)
-////err = c.deploymentDeleter(doneDeployment)
-//glog.Infof("Deleting deployment %s", doneDeployment.Name)
-//if doneDeployment.Spec.Replicas != 0 {
-//glog.Infof("Setting replicas to 0 for %s", doneDeployment.Name)
-//doneDeployment.Spec.Replicas = 0
-//_, err = c.deploymentUpdater(doneDeployment)
-//if err != nil {
-//glog.Errorf("Unable to set replicates to 0 on deployment: %+v", err)
-//}
-//c.queue.AddAfter(deleteSitepodRequest{key}, RetryDelay)
-//return
-//} else {
-//if doneDeployment.Status.Replicas != 0 {
-//// TODO use delayed workqueue
-//glog.Infof("Replicates not yet 0")
-//c.queue.AddAfter(deleteSitepodRequest{key}, RetryDelay)
-//} else {
-//glog.Infof("Replicates now yet 0")
-
-//err := c.deploymentDeleter(doneDeployment)
-//if err != nil {
-//glog.Errorf("Unable to delete deployment")
-//return
-//}
-
-//selector, err := unversioned.LabelSelectorAsSelector(doneDeployment.Spec.Selector)
-////c.rsSet(labels.Newre
-//rsObjs, err := c.rsFilter(selector)
-//if err != nil {
-//glog.Errorf("Unable to get replica sets %v", err)
-//return
-//}
-
-//rsList := rsObjs.(*ext_api.ReplicaSetList)
-//for _, rsObj := range rsList.Items {
-//c.rsDeleter(&rsObj)
-//}
-
-//}
-//}
-
-//}
-//glog.Infof("Deleteing related system users")
-//req, err := labels.NewRequirement("sitepod", labels.EqualsOperator, sets.NewString(key))
-//if err != nil {
-//panic(err)
-//}
-//sitepodMatcher := labels.NewSelector().Add(*req)
-////TODO: figure out where to host this list
-//sitepodResources := []string{"systemusers", "serviceinstances"}
-
-//for _, sitepodResource := range sitepodResources {
-//res := c.rc.Delete().Resource("systemusers").Namespace("default").LabelsSelectorParam(sitepodMatcher).Do()
-
-//if err = res.Error(); err != nil {
-//glog.Errorf("Unable to delete %s: %+v", sitepodResource, err)
-//c.queue.AddAfter(deleteSitepodRequest{key}, RetryDelay)
-//}
-//}
-//}
