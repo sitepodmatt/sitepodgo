@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
-	kerrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/meta"
 	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
 	"sitepod.io/sitepod/pkg/api"
@@ -26,8 +26,10 @@ var (
 func HackImportIgnored(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
-// template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
+// template type ClientTmpl(ResourceType, ResourceListType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
 type ResourceType int
+
+type ResouceListType []int
 
 const ResourceName = "HolderName"
 
@@ -146,27 +148,23 @@ func (c *ClientTmpl) GetByKey(key string) *ResourceType {
 	return item
 }
 
-func (c *ClientTmpl) BySitepodKey(sitepodKey string) ([]*ResourceType, error) {
+func (c *ClientTmpl) BySitepodKey(sitepodKey string) []*ResourceType {
 	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
 
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	typedItems := []*ResourceType{}
 	for _, item := range items {
 		typedItems = append(typedItems, item.(*ResourceType))
 	}
-	return typedItems, nil
+	return typedItems
 }
 
 func (c *ClientTmpl) SingleBySitepodKey(sitepodKey string) *ResourceType {
 
-	items, err := c.BySitepodKey(sitepodKey)
-
-	if err != nil {
-		panic(err)
-	}
+	items := c.BySitepodKey(sitepodKey)
 
 	if len(items) == 0 {
 		panic(errors.New("None found"))
@@ -178,11 +176,7 @@ func (c *ClientTmpl) SingleBySitepodKey(sitepodKey string) *ResourceType {
 
 func (c *ClientTmpl) MaybeSingleBySitepodKey(sitepodKey string) (*ResourceType, bool) {
 
-	items, err := c.BySitepodKey(sitepodKey)
-
-	if err != nil {
-		panic(err)
-	}
+	items := c.BySitepodKey(sitepodKey)
 
 	if len(items) == 0 {
 		return nil, false
@@ -220,28 +214,62 @@ func (c *ClientTmpl) Add(target *ResourceType) *ResourceType {
 	return item
 }
 
-func (c *ClientTmpl) UpdateOrAdd(target *ResourceType) *ResourceType {
+func (c *ClientTmpl) Update(target *ResourceType) *ResourceType {
 
 	accessor, err := meta.Accessor(target)
 	if err != nil {
 		panic(err)
 	}
+	rName := accessor.GetName()
+	rcReq := c.rc.Put()
+	if Namespaced {
+		rcReq = rcReq.Namespace(c.ns)
+	}
+	replacementTarget, err := rcReq.Resource(ResourcePluralName).Name(rName).Body(target).Do().Get()
+	if err != nil {
+		panic(err)
+	}
+	item := replacementTarget.(*ResourceType)
+	return item
+}
 
-	uid := accessor.GetUID()
-	if len(string(uid)) > 0 {
-		rName := accessor.GetName()
-		rcReq := c.rc.Put()
-		if Namespaced {
-			rcReq = rcReq.Namespace(c.ns)
-		}
-		replacementTarget, err := rcReq.Resource(ResourcePluralName).Name(rName).Body(target).Do().Get()
-		if err != nil {
-			panic(err)
-		}
-		item := replacementTarget.(*ResourceType)
-		glog.Infof("Updated %s - %s (rv: %s)", ResourceName, item.Name, item.ResourceVersion)
-		return item
+func (c *ClientTmpl) UpdateOrAdd(target *ResourceType) *ResourceType {
+
+	if len(string(target.UID)) > 0 {
+		return c.Update(target)
 	} else {
 		return c.Add(target)
+	}
+}
+
+func (c *ClientTmpl) FetchList(s labels.Selector) []*ResourceType {
+
+	var prc *restclient.Request
+	if c.ns == "" {
+		prc = c.rc.Get().Resource(ResourcePluralName).LabelsSelectorParam(s)
+	} else {
+		prc = c.rc.Get().Resource(ResourcePluralName).Namespace(c.ns).LabelsSelectorParam(s)
+	}
+
+	rObj, err := prc.Do().Get()
+
+	if err != nil {
+		panic(err)
+	}
+
+	target := []*ResourceType{}
+	kList := rObj.(*ResourceListType)
+	for _, kItem := range kList.Items {
+		target = append(target, &kItem)
+	}
+
+	return target
+}
+
+func (c *ClientTmpl) Delete(target *ResourceType) {
+
+	err := c.rc.Delete().Name(target.Name).Do().Error()
+	if err != nil {
+		panic(err)
 	}
 }

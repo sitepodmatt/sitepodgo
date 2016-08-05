@@ -20,27 +20,27 @@ import (
 )
 
 var (
-	resyncPeriodSitepodClient = 5 * time.Minute
+	resyncPeriodReplicaSetClient = 5 * time.Minute
 )
 
-func HackImportIgnoredSitepodClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
+func HackImportIgnoredReplicaSetClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
 // template type ClientTmpl(ResourceType, ResourceListType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
 
-type ResouceListTypeSitepodClient []int
+type ResouceListTypeReplicaSetClient []int
 
-type SitepodClient struct {
+type ReplicaSetClient struct {
 	rc            *restclient.RESTClient
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewSitepodClient(rc *restclient.RESTClient, ns string) *SitepodClient {
-	c := &SitepodClient{
+func NewReplicaSetClient(rc *restclient.RESTClient, ns string) *ReplicaSetClient {
+	c := &ReplicaSetClient{
 		rc:            rc,
-		supportedType: reflect.TypeOf(&v1.Sitepod{}),
+		supportedType: reflect.TypeOf(&ext_api.ReplicaSet{}),
 	}
 
 	if true {
@@ -60,42 +60,42 @@ func NewSitepodClient(rc *restclient.RESTClient, ns string) *SitepodClient {
 		}
 	}
 	c.informer = framework.NewSharedIndexInformer(
-		api.NewListWatchFromClient(c.rc, "Sitepods", c.ns, nil, pc),
-		&v1.Sitepod{},
-		resyncPeriodSitepodClient,
+		api.NewListWatchFromClient(c.rc, "ReplicaSets", c.ns, nil, pc),
+		&ext_api.ReplicaSet{},
+		resyncPeriodReplicaSetClient,
 		indexers,
 	)
 
 	return c
 }
 
-func (c *SitepodClient) StartInformer(stopCh <-chan struct{}) {
+func (c *ReplicaSetClient) StartInformer(stopCh <-chan struct{}) {
 	c.informer.Run(stopCh)
 }
 
-func (c *SitepodClient) AddInformerHandlers(reh framework.ResourceEventHandler) {
+func (c *ReplicaSetClient) AddInformerHandlers(reh framework.ResourceEventHandler) {
 	if c.informer == nil {
-		panic(fmt.Sprintf("%s informer not started", "Sitepod"))
+		panic(fmt.Sprintf("%s informer not started", "ReplicaSet"))
 	}
 
 	c.informer.AddEventHandler(reh)
 }
 
-func (c *SitepodClient) HasSynced() bool {
+func (c *ReplicaSetClient) HasSynced() bool {
 	if c.informer == nil {
 		return false
 	}
 	return c.informer.HasSynced()
 }
 
-func (c *SitepodClient) NewEmpty() *v1.Sitepod {
-	item := &v1.Sitepod{}
-	item.GenerateName = "sitepod-"
+func (c *ReplicaSetClient) NewEmpty() *ext_api.ReplicaSet {
+	item := &ext_api.ReplicaSet{}
+	item.GenerateName = "sitepod-rs-"
 	return item
 }
 
 //TODO: wrong location? shared?
-func (c *SitepodClient) KeyOf(obj interface{}) string {
+func (c *ReplicaSetClient) KeyOf(obj interface{}) string {
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
 		panic(err)
@@ -104,11 +104,11 @@ func (c *SitepodClient) KeyOf(obj interface{}) string {
 }
 
 //TODO: wrong location? shared?
-func (c *SitepodClient) DeepEqual(a interface{}, b interface{}) bool {
+func (c *ReplicaSetClient) DeepEqual(a interface{}, b interface{}) bool {
 	return k8s_api.Semantic.DeepEqual(a, b)
 }
 
-func (c *SitepodClient) MaybeGetByKey(key string) (*v1.Sitepod, bool) {
+func (c *ReplicaSetClient) MaybeGetByKey(key string) (*ext_api.ReplicaSet, bool) {
 
 	if !strings.Contains(key, "/") && true {
 		key = fmt.Sprintf("%s/%s", c.ns, key)
@@ -123,13 +123,13 @@ func (c *SitepodClient) MaybeGetByKey(key string) (*v1.Sitepod, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*v1.Sitepod)
-		glog.Infof("Got %s from informer store with rv %s", "Sitepod", item.ResourceVersion)
+		item := iObj.(*ext_api.ReplicaSet)
+		glog.Infof("Got %s from informer store with rv %s", "ReplicaSet", item.ResourceVersion)
 		return item, exists
 	}
 }
 
-func (c *SitepodClient) GetByKey(key string) *v1.Sitepod {
+func (c *ReplicaSetClient) GetByKey(key string) *ext_api.ReplicaSet {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
@@ -139,21 +139,21 @@ func (c *SitepodClient) GetByKey(key string) *v1.Sitepod {
 	return item
 }
 
-func (c *SitepodClient) BySitepodKey(sitepodKey string) []*v1.Sitepod {
+func (c *ReplicaSetClient) BySitepodKey(sitepodKey string) []*ext_api.ReplicaSet {
 	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
 
 	if err != nil {
 		panic(err)
 	}
 
-	typedItems := []*v1.Sitepod{}
+	typedItems := []*ext_api.ReplicaSet{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*v1.Sitepod))
+		typedItems = append(typedItems, item.(*ext_api.ReplicaSet))
 	}
 	return typedItems
 }
 
-func (c *SitepodClient) SingleBySitepodKey(sitepodKey string) *v1.Sitepod {
+func (c *ReplicaSetClient) SingleBySitepodKey(sitepodKey string) *ext_api.ReplicaSet {
 
 	items := c.BySitepodKey(sitepodKey)
 
@@ -165,7 +165,7 @@ func (c *SitepodClient) SingleBySitepodKey(sitepodKey string) *v1.Sitepod {
 
 }
 
-func (c *SitepodClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Sitepod, bool) {
+func (c *ReplicaSetClient) MaybeSingleBySitepodKey(sitepodKey string) (*ext_api.ReplicaSet, bool) {
 
 	items := c.BySitepodKey(sitepodKey)
 
@@ -174,7 +174,7 @@ func (c *SitepodClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Sitepod,
 	} else {
 
 		if len(items) > 1 {
-			glog.Warningf("Unexpected number of %s for sitepod %s - %d items matched", "Sitepods", sitepodKey, len(items))
+			glog.Warningf("Unexpected number of %s for sitepod %s - %d items matched", "ReplicaSets", sitepodKey, len(items))
 		}
 
 		return items[0], true
@@ -182,14 +182,14 @@ func (c *SitepodClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Sitepod,
 
 }
 
-func (c *SitepodClient) Add(target *v1.Sitepod) *v1.Sitepod {
+func (c *ReplicaSetClient) Add(target *ext_api.ReplicaSet) *ext_api.ReplicaSet {
 
 	rcReq := c.rc.Post()
 	if true {
 		rcReq = rcReq.Namespace(c.ns)
 	}
 
-	result := rcReq.Resource("Sitepods").Body(target).Do()
+	result := rcReq.Resource("ReplicaSets").Body(target).Do()
 
 	if err := result.Error(); err != nil {
 		panic(err)
@@ -200,12 +200,12 @@ func (c *SitepodClient) Add(target *v1.Sitepod) *v1.Sitepod {
 	if err != nil {
 		panic(err)
 	}
-	item := r.(*v1.Sitepod)
-	glog.Infof("Added %s - %s (rv: %s)", "Sitepod", item.Name, item.ResourceVersion)
+	item := r.(*ext_api.ReplicaSet)
+	glog.Infof("Added %s - %s (rv: %s)", "ReplicaSet", item.Name, item.ResourceVersion)
 	return item
 }
 
-func (c *SitepodClient) Update(target *v1.Sitepod) *v1.Sitepod {
+func (c *ReplicaSetClient) Update(target *ext_api.ReplicaSet) *ext_api.ReplicaSet {
 
 	accessor, err := meta.Accessor(target)
 	if err != nil {
@@ -216,15 +216,15 @@ func (c *SitepodClient) Update(target *v1.Sitepod) *v1.Sitepod {
 	if true {
 		rcReq = rcReq.Namespace(c.ns)
 	}
-	replacementTarget, err := rcReq.Resource("Sitepods").Name(rName).Body(target).Do().Get()
+	replacementTarget, err := rcReq.Resource("ReplicaSets").Name(rName).Body(target).Do().Get()
 	if err != nil {
 		panic(err)
 	}
-	item := replacementTarget.(*v1.Sitepod)
+	item := replacementTarget.(*ext_api.ReplicaSet)
 	return item
 }
 
-func (c *SitepodClient) UpdateOrAdd(target *v1.Sitepod) *v1.Sitepod {
+func (c *ReplicaSetClient) UpdateOrAdd(target *ext_api.ReplicaSet) *ext_api.ReplicaSet {
 
 	if len(string(target.UID)) > 0 {
 		return c.Update(target)
@@ -233,13 +233,13 @@ func (c *SitepodClient) UpdateOrAdd(target *v1.Sitepod) *v1.Sitepod {
 	}
 }
 
-func (c *SitepodClient) FetchList(s labels.Selector) []*v1.Sitepod {
+func (c *ReplicaSetClient) FetchList(s labels.Selector) []*ext_api.ReplicaSet {
 
 	var prc *restclient.Request
 	if c.ns == "" {
-		prc = c.rc.Get().Resource("Sitepods").LabelsSelectorParam(s)
+		prc = c.rc.Get().Resource("ReplicaSets").LabelsSelectorParam(s)
 	} else {
-		prc = c.rc.Get().Resource("Sitepods").Namespace(c.ns).LabelsSelectorParam(s)
+		prc = c.rc.Get().Resource("ReplicaSets").Namespace(c.ns).LabelsSelectorParam(s)
 	}
 
 	rObj, err := prc.Do().Get()
@@ -248,8 +248,8 @@ func (c *SitepodClient) FetchList(s labels.Selector) []*v1.Sitepod {
 		panic(err)
 	}
 
-	target := []*v1.Sitepod{}
-	kList := rObj.(*v1.SitepodList)
+	target := []*ext_api.ReplicaSet{}
+	kList := rObj.(*ext_api.ReplicaSetList)
 	for _, kItem := range kList.Items {
 		target = append(target, &kItem)
 	}
@@ -257,7 +257,7 @@ func (c *SitepodClient) FetchList(s labels.Selector) []*v1.Sitepod {
 	return target
 }
 
-func (c *SitepodClient) Delete(target *v1.Sitepod) {
+func (c *ReplicaSetClient) Delete(target *ext_api.ReplicaSet) {
 
 	err := c.rc.Delete().Name(target.Name).Do().Error()
 	if err != nil {

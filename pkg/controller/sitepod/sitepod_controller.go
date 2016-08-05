@@ -11,6 +11,7 @@ import (
 	. "github.com/ahmetalpbalkan/go-linq"
 	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/controller/framework"
 	//"sitepod.io/sitepod/pkg/api/v1"
 	cc "sitepod.io/sitepod/pkg/client"
@@ -130,5 +131,43 @@ func (sc *SitepodController) ProcessUpdate(key string) error {
 	deployment.Labels = labels
 
 	deployment = c.Deployments().UpdateOrAdd(deployment)
+	return nil
+}
+
+func (sc *SitepodController) ProcessDelete(key string) error {
+
+	c := sc.Client
+
+	deployments := c.Deployments().BySitepodKey(key)
+	glog.Infof("Found %d deployments for sitepod  %s", len(deployments), key)
+
+	for _, deployment := range deployments {
+
+		glog.Infof("Deleting deployment %s", deployment.Name)
+
+		if deployment.Spec.Replicas != 0 {
+
+			glog.Infof("Setting replicas to 0 for %s", deployment.Name)
+			deployment.Spec.Replicas = 0
+			c.Deployments().Update(deployment)
+			return nil
+		}
+
+		if deployment.Status.Replicas != 0 {
+			return nil
+		}
+
+		c.Deployments().Delete(deployment)
+
+		selector, _ := unversioned.LabelSelectorAsSelector(deployment.Spec.Selector)
+
+		replicaSets := c.ReplicaSets().FetchList(selector)
+
+		for _, replicaSet := range replicaSets {
+			c.ReplicaSets().Delete(replicaSet)
+		}
+
+	}
+
 	return nil
 }

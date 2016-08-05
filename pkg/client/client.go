@@ -26,13 +26,15 @@ type Client struct {
 	cachedClientMutex sync.Mutex
 }
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SitepodClient(v1.Sitepod,"Sitepod","Sitepods",true,"sitepod-")
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SitepodClient(v1.Sitepod,v1.SitepodList,"Sitepod","Sitepods",true,"sitepod-")
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClaimClient(k8s_api.PersistentVolumeClaim,"PersistentVolumeClaim","PersistentVolumeClaims",true,"sitepod-pvc-")
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClaimClient(k8s_api.PersistentVolumeClaim,k8s_api.PersistentVolumeClaimList,"PersistentVolumeClaim","PersistentVolumeClaims",true,"sitepod-pvc-")
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClient(k8s_api.PersistentVolume,"PersistentVolume","PersistentVolumes",false,"sitepod-pv-")
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClient(k8s_api.PersistentVolume,k8s_api.PersistentVolumeList,"PersistentVolume","PersistentVolumes",false,"sitepod-pv-")
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" DeploymentClient(ext_api.Deployment,"Deployment","Deployments",true,"sitepod-deployment-")
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" DeploymentClient(ext_api.Deployment,ext_api.DeploymentList,"Deployment","Deployments",true,"sitepod-deployment-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ReplicaSetClient(ext_api.ReplicaSet,ext_api.ReplicaSetList,"ReplicaSet","ReplicaSets",true,"sitepod-rs-")
 
 func NewClient(scheme *runtime.Scheme) *Client {
 	client := &Client{scheme: scheme}
@@ -71,6 +73,10 @@ func (c *Client) PVs() *PVClient {
 
 func (c *Client) Deployments() *DeploymentClient {
 	return c.usingCache("deployments", func() interface{} { return NewDeploymentClient(c.k8sExtRestClient, namespace) }).(*DeploymentClient)
+}
+
+func (c *Client) ReplicaSets() *ReplicaSetClient {
+	return c.usingCache("replicasets", func() interface{} { return NewReplicaSetClient(c.k8sExtRestClient, namespace) }).(*ReplicaSetClient)
 }
 
 func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) *restclient.RESTClient {

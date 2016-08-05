@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
-	kerrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/meta"
 	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
 	"sitepod.io/sitepod/pkg/api"
@@ -26,7 +26,9 @@ var (
 func HackImportIgnoredPVClaimClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
-// template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
+// template type ClientTmpl(ResourceType, ResourceListType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
+
+type ResouceListTypePVClaimClient []int
 
 type PVClaimClient struct {
 	rc            *restclient.RESTClient
@@ -137,27 +139,23 @@ func (c *PVClaimClient) GetByKey(key string) *k8s_api.PersistentVolumeClaim {
 	return item
 }
 
-func (c *PVClaimClient) BySitepodKey(sitepodKey string) ([]*k8s_api.PersistentVolumeClaim, error) {
+func (c *PVClaimClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVolumeClaim {
 	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
 
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	typedItems := []*k8s_api.PersistentVolumeClaim{}
 	for _, item := range items {
 		typedItems = append(typedItems, item.(*k8s_api.PersistentVolumeClaim))
 	}
-	return typedItems, nil
+	return typedItems
 }
 
 func (c *PVClaimClient) SingleBySitepodKey(sitepodKey string) *k8s_api.PersistentVolumeClaim {
 
-	items, err := c.BySitepodKey(sitepodKey)
-
-	if err != nil {
-		panic(err)
-	}
+	items := c.BySitepodKey(sitepodKey)
 
 	if len(items) == 0 {
 		panic(errors.New("None found"))
@@ -169,11 +167,7 @@ func (c *PVClaimClient) SingleBySitepodKey(sitepodKey string) *k8s_api.Persisten
 
 func (c *PVClaimClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.PersistentVolumeClaim, bool) {
 
-	items, err := c.BySitepodKey(sitepodKey)
-
-	if err != nil {
-		panic(err)
-	}
+	items := c.BySitepodKey(sitepodKey)
 
 	if len(items) == 0 {
 		return nil, false
@@ -211,31 +205,62 @@ func (c *PVClaimClient) Add(target *k8s_api.PersistentVolumeClaim) *k8s_api.Pers
 	return item
 }
 
-func (c *PVClaimClient) UpdateOrAdd(target *k8s_api.PersistentVolumeClaim) *k8s_api.PersistentVolumeClaim {
+func (c *PVClaimClient) Update(target *k8s_api.PersistentVolumeClaim) *k8s_api.PersistentVolumeClaim {
 
 	accessor, err := meta.Accessor(target)
 	if err != nil {
 		panic(err)
 	}
+	rName := accessor.GetName()
+	rcReq := c.rc.Put()
+	if true {
+		rcReq = rcReq.Namespace(c.ns)
+	}
+	replacementTarget, err := rcReq.Resource("PersistentVolumeClaims").Name(rName).Body(target).Do().Get()
+	if err != nil {
+		panic(err)
+	}
+	item := replacementTarget.(*k8s_api.PersistentVolumeClaim)
+	return item
+}
 
-	uid := accessor.GetUID()
-	if len(string(uid)) > 0 {
-		rName := accessor.GetName()
-		rcReq := c.rc.Put()
-		if true {
-			rcReq = rcReq.Namespace(c.ns)
-		}
-		replacementTarget, err := rcReq.Resource("PersistentVolumeClaims").Name(rName).Body(target).Do().Get()
-		if err != nil {
-			glog.Errorf("Type of error: %+v : %s", err, reflect.TypeOf(err))
-			errResult := err.(*kerrors.StatusError)
-			glog.Errorf("Status code: %s ", errResult.ErrStatus.Reason)
-			panic(err)
-		}
-		item := replacementTarget.(*k8s_api.PersistentVolumeClaim)
-		glog.Infof("Updated %s - %s (rv: %s)", "PersistentVolumeClaim", item.Name, item.ResourceVersion)
-		return item
+func (c *PVClaimClient) UpdateOrAdd(target *k8s_api.PersistentVolumeClaim) *k8s_api.PersistentVolumeClaim {
+
+	if len(string(target.UID)) > 0 {
+		return c.Update(target)
 	} else {
 		return c.Add(target)
+	}
+}
+
+func (c *PVClaimClient) FetchList(s labels.Selector) []*k8s_api.PersistentVolumeClaim {
+
+	var prc *restclient.Request
+	if c.ns == "" {
+		prc = c.rc.Get().Resource("PersistentVolumeClaims").LabelsSelectorParam(s)
+	} else {
+		prc = c.rc.Get().Resource("PersistentVolumeClaims").Namespace(c.ns).LabelsSelectorParam(s)
+	}
+
+	rObj, err := prc.Do().Get()
+
+	if err != nil {
+		panic(err)
+	}
+
+	target := []*k8s_api.PersistentVolumeClaim{}
+	kList := rObj.(*k8s_api.PersistentVolumeClaimList)
+	for _, kItem := range kList.Items {
+		target = append(target, &kItem)
+	}
+
+	return target
+}
+
+func (c *PVClaimClient) Delete(target *k8s_api.PersistentVolumeClaim) {
+
+	err := c.rc.Delete().Name(target.Name).Do().Error()
+	if err != nil {
+		panic(err)
 	}
 }

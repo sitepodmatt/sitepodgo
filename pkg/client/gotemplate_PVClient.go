@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
-	kerrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/meta"
 	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
 	"sitepod.io/sitepod/pkg/api"
@@ -26,7 +26,9 @@ var (
 func HackImportIgnoredPVClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
-// template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
+// template type ClientTmpl(ResourceType, ResourceListType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
+
+type ResouceListTypePVClient []int
 
 type PVClient struct {
 	rc            *restclient.RESTClient
@@ -137,27 +139,23 @@ func (c *PVClient) GetByKey(key string) *k8s_api.PersistentVolume {
 	return item
 }
 
-func (c *PVClient) BySitepodKey(sitepodKey string) ([]*k8s_api.PersistentVolume, error) {
+func (c *PVClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVolume {
 	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
 
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	typedItems := []*k8s_api.PersistentVolume{}
 	for _, item := range items {
 		typedItems = append(typedItems, item.(*k8s_api.PersistentVolume))
 	}
-	return typedItems, nil
+	return typedItems
 }
 
 func (c *PVClient) SingleBySitepodKey(sitepodKey string) *k8s_api.PersistentVolume {
 
-	items, err := c.BySitepodKey(sitepodKey)
-
-	if err != nil {
-		panic(err)
-	}
+	items := c.BySitepodKey(sitepodKey)
 
 	if len(items) == 0 {
 		panic(errors.New("None found"))
@@ -169,11 +167,7 @@ func (c *PVClient) SingleBySitepodKey(sitepodKey string) *k8s_api.PersistentVolu
 
 func (c *PVClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.PersistentVolume, bool) {
 
-	items, err := c.BySitepodKey(sitepodKey)
-
-	if err != nil {
-		panic(err)
-	}
+	items := c.BySitepodKey(sitepodKey)
 
 	if len(items) == 0 {
 		return nil, false
@@ -211,31 +205,62 @@ func (c *PVClient) Add(target *k8s_api.PersistentVolume) *k8s_api.PersistentVolu
 	return item
 }
 
-func (c *PVClient) UpdateOrAdd(target *k8s_api.PersistentVolume) *k8s_api.PersistentVolume {
+func (c *PVClient) Update(target *k8s_api.PersistentVolume) *k8s_api.PersistentVolume {
 
 	accessor, err := meta.Accessor(target)
 	if err != nil {
 		panic(err)
 	}
+	rName := accessor.GetName()
+	rcReq := c.rc.Put()
+	if false {
+		rcReq = rcReq.Namespace(c.ns)
+	}
+	replacementTarget, err := rcReq.Resource("PersistentVolumes").Name(rName).Body(target).Do().Get()
+	if err != nil {
+		panic(err)
+	}
+	item := replacementTarget.(*k8s_api.PersistentVolume)
+	return item
+}
 
-	uid := accessor.GetUID()
-	if len(string(uid)) > 0 {
-		rName := accessor.GetName()
-		rcReq := c.rc.Put()
-		if false {
-			rcReq = rcReq.Namespace(c.ns)
-		}
-		replacementTarget, err := rcReq.Resource("PersistentVolumes").Name(rName).Body(target).Do().Get()
-		if err != nil {
-			glog.Errorf("Type of error: %+v : %s", err, reflect.TypeOf(err))
-			errResult := err.(*kerrors.StatusError)
-			glog.Errorf("Status code: %s ", errResult.ErrStatus.Reason)
-			panic(err)
-		}
-		item := replacementTarget.(*k8s_api.PersistentVolume)
-		glog.Infof("Updated %s - %s (rv: %s)", "PersistentVolume", item.Name, item.ResourceVersion)
-		return item
+func (c *PVClient) UpdateOrAdd(target *k8s_api.PersistentVolume) *k8s_api.PersistentVolume {
+
+	if len(string(target.UID)) > 0 {
+		return c.Update(target)
 	} else {
 		return c.Add(target)
+	}
+}
+
+func (c *PVClient) FetchList(s labels.Selector) []*k8s_api.PersistentVolume {
+
+	var prc *restclient.Request
+	if c.ns == "" {
+		prc = c.rc.Get().Resource("PersistentVolumes").LabelsSelectorParam(s)
+	} else {
+		prc = c.rc.Get().Resource("PersistentVolumes").Namespace(c.ns).LabelsSelectorParam(s)
+	}
+
+	rObj, err := prc.Do().Get()
+
+	if err != nil {
+		panic(err)
+	}
+
+	target := []*k8s_api.PersistentVolume{}
+	kList := rObj.(*k8s_api.PersistentVolumeList)
+	for _, kItem := range kList.Items {
+		target = append(target, &kItem)
+	}
+
+	return target
+}
+
+func (c *PVClient) Delete(target *k8s_api.PersistentVolume) {
+
+	err := c.rc.Delete().Name(target.Name).Do().Error()
+	if err != nil {
+		panic(err)
 	}
 }

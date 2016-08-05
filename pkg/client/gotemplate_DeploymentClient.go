@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
-	kerrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/meta"
 	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
 	"sitepod.io/sitepod/pkg/api"
@@ -26,7 +26,9 @@ var (
 func HackImportIgnoredDeploymentClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
-// template type ClientTmpl(ResourceType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
+// template type ClientTmpl(ResourceType, ResourceListType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
+
+type ResouceListTypeDeploymentClient []int
 
 type DeploymentClient struct {
 	rc            *restclient.RESTClient
@@ -137,27 +139,23 @@ func (c *DeploymentClient) GetByKey(key string) *ext_api.Deployment {
 	return item
 }
 
-func (c *DeploymentClient) BySitepodKey(sitepodKey string) ([]*ext_api.Deployment, error) {
+func (c *DeploymentClient) BySitepodKey(sitepodKey string) []*ext_api.Deployment {
 	items, err := c.informer.GetIndexer().ByIndex("sitepod", sitepodKey)
 
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	typedItems := []*ext_api.Deployment{}
 	for _, item := range items {
 		typedItems = append(typedItems, item.(*ext_api.Deployment))
 	}
-	return typedItems, nil
+	return typedItems
 }
 
 func (c *DeploymentClient) SingleBySitepodKey(sitepodKey string) *ext_api.Deployment {
 
-	items, err := c.BySitepodKey(sitepodKey)
-
-	if err != nil {
-		panic(err)
-	}
+	items := c.BySitepodKey(sitepodKey)
 
 	if len(items) == 0 {
 		panic(errors.New("None found"))
@@ -169,11 +167,7 @@ func (c *DeploymentClient) SingleBySitepodKey(sitepodKey string) *ext_api.Deploy
 
 func (c *DeploymentClient) MaybeSingleBySitepodKey(sitepodKey string) (*ext_api.Deployment, bool) {
 
-	items, err := c.BySitepodKey(sitepodKey)
-
-	if err != nil {
-		panic(err)
-	}
+	items := c.BySitepodKey(sitepodKey)
 
 	if len(items) == 0 {
 		return nil, false
@@ -211,31 +205,62 @@ func (c *DeploymentClient) Add(target *ext_api.Deployment) *ext_api.Deployment {
 	return item
 }
 
-func (c *DeploymentClient) UpdateOrAdd(target *ext_api.Deployment) *ext_api.Deployment {
+func (c *DeploymentClient) Update(target *ext_api.Deployment) *ext_api.Deployment {
 
 	accessor, err := meta.Accessor(target)
 	if err != nil {
 		panic(err)
 	}
+	rName := accessor.GetName()
+	rcReq := c.rc.Put()
+	if true {
+		rcReq = rcReq.Namespace(c.ns)
+	}
+	replacementTarget, err := rcReq.Resource("Deployments").Name(rName).Body(target).Do().Get()
+	if err != nil {
+		panic(err)
+	}
+	item := replacementTarget.(*ext_api.Deployment)
+	return item
+}
 
-	uid := accessor.GetUID()
-	if len(string(uid)) > 0 {
-		rName := accessor.GetName()
-		rcReq := c.rc.Put()
-		if true {
-			rcReq = rcReq.Namespace(c.ns)
-		}
-		replacementTarget, err := rcReq.Resource("Deployments").Name(rName).Body(target).Do().Get()
-		if err != nil {
-			glog.Errorf("Type of error: %+v : %s", err, reflect.TypeOf(err))
-			errResult := err.(*kerrors.StatusError)
-			glog.Errorf("Status code: %s ", errResult.ErrStatus.Reason)
-			panic(err)
-		}
-		item := replacementTarget.(*ext_api.Deployment)
-		glog.Infof("Updated %s - %s (rv: %s)", "Deployment", item.Name, item.ResourceVersion)
-		return item
+func (c *DeploymentClient) UpdateOrAdd(target *ext_api.Deployment) *ext_api.Deployment {
+
+	if len(string(target.UID)) > 0 {
+		return c.Update(target)
 	} else {
 		return c.Add(target)
+	}
+}
+
+func (c *DeploymentClient) FetchList(s labels.Selector) []*ext_api.Deployment {
+
+	var prc *restclient.Request
+	if c.ns == "" {
+		prc = c.rc.Get().Resource("Deployments").LabelsSelectorParam(s)
+	} else {
+		prc = c.rc.Get().Resource("Deployments").Namespace(c.ns).LabelsSelectorParam(s)
+	}
+
+	rObj, err := prc.Do().Get()
+
+	if err != nil {
+		panic(err)
+	}
+
+	target := []*ext_api.Deployment{}
+	kList := rObj.(*ext_api.DeploymentList)
+	for _, kItem := range kList.Items {
+		target = append(target, &kItem)
+	}
+
+	return target
+}
+
+func (c *DeploymentClient) Delete(target *ext_api.Deployment) {
+
+	err := c.rc.Delete().Name(target.Name).Do().Error()
+	if err != nil {
+		panic(err)
 	}
 }
