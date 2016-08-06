@@ -20,9 +20,7 @@ var runCmd = &cobra.Command{
 }
 
 func init() {
-	flag.Set("v", "3")
 	RootCmd.AddCommand(runCmd)
 	runCmd.PersistentFlags().String("apiserver", "http://127.0.0.1:8080", "root URL to api-server e.g. https://127.0.0.1:6443")
 	runCmd.PersistentFlags().String("namespace", "default", "namespace to operate on")
-	//	runCmd.PersistentFlags().Int("v", 4, "logging level")
 }

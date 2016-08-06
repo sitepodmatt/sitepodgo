@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "generateName": "sitepod-ssh-",
+    "labels": {
+      "sitepod": "0185b0de-56dd-11e6-9e95-98eecb292b22"
+    }
+  },
+  "apiVersion": "stable.sitepod.io/v1",
+  "kind": "Serviceinstance",
+  "spec": {
+    "type": "ssh",
+    "displayName": "SSH Instance",
+    "sshHostKey": "-----BEGIN RSA PRIVATE KEY-----\nMIIEogIBAAKCAQEA0BhNeDsPUqNlPGvIiXjusBPUIpbo9j66U1l0hsLu5XOVnGG9\nEg8XR+vrfw75tBYZj3sOAlq507UxmhxMUjpXlkYI230wQp8Em5CxG7I0ei8turJl\n8UVEytRzmoYgnOeYC22M570ahccELTmQiRm7fiW6VaMYxLxYJ6LtSDTV6alQNDqU\neoQaw+LRXB8gHYffVix1cCxkNmIEy1Ujg6VgxZPIg2kqvxcWJFyt38ZxLnrn+PG5\nbzSa6htOlkWBhzBzk6zcGHuJ/JrJN/Mp8yzu/pGbfen1dMFC1aGti/15xYXGR3X3\n/mwxN31T8NfPtYInLSvAexinPcJxeTf3JoCwWwIDAQABAoIBAGCDpQqqecTeO8n2\nQ6BfEnVf/Pe9/naXSVv3FXCbYKnTHgTV4BdMIIQfC652h6HazigZ7rlw0tc6JrNP\nhKZuoMj12o3SVlvP3Rc52Kr70BMLZq48p8NrWSipuKRmqSGc2IwUV1H0ByUc1PcU\nx9COusMbRH0LlCVLJafcjSj8OGqSYpsYXHpdt6IRp83Di83TmKp8qP9iKH9x0PWa\nfGZb6aPY7wqgGmXnA40RNqWlr8pZZcUF57bHtWFN0EdmcjIINMe0IBjCPHQXQ8cb\naVxSCqcB9YuVC1/B4uzHKWezullklJzMdsxk+PxoOqoBEAdjv3mzZu+BRlXuGcRT\nMslF5qECgYEA6r2LBf121OdEzK33kqYcadU0SJ7cUwZRst2EOg4N2AoxtIR30Mw1\n4XBEMMS18ZwiUqWlEy10VI0v1kpMuOabwsU6isxrpzIEwxy7EwsFNr3BBeh4FY4e\nKcihwNbaeOzvtQla0Hm1xPZ1Kpt0JV6Dxpa5wUpw/OlGBLgxBulOHbUCgYEA4vD7\n9034Zx1BQfb+rNGtO1+SpE+VvHsi4QsP/nC0VoEUgKU8tEjomuoGVTpbvyRPFQTG\nH934XXcAaTGr9cy59dXRFdznUIeDqiZpGj6JsekvewYtzHSxBbmJDX8F8kh5pqPe\n0kdmtDOL0xJiiVrWByHTHadfOCHZLBXHk9xe388CgYBpbFDYktngijEK34KVmQaf\nvUHq73Wxz9+3PecZj6BGC2YBVZDd9Ciqo5nscRvpc56ykXQOpdZd9r6qNdo5HFCN\n67f8CAy9HSioW+nkhomD6TqcJahwvc/sIhALJDMgJgENxDLF+DNbTviV9xT1h3oV\nITIxjfYqj7WDfxl9qiAMFQKBgClDP8z7dErrWs4vpqatiR3ehr8xaTxX90OLy2Cs\nBV4lIiEx6hOtnf1sx7H/ZmcepvJfZ9areVklJgH6chXDH5y/P8EF5VkTCrGJQlrv\nPAIJMATiXrlqDjXIQk8d5WrkGppd+UmqidYB+U5rbVckGP46/DPMFtgR73bAjwUn\ncGipAoGAegqn2cYrL6vSLwcDJsH7upatDZolbXSwRcCzF7DA/uLdICqtTpwBVP7L\nGSMVT6r93qoR/wUIYnMsCItkkOlKqk+n9SJVJzeJMfrzNKTOe+witP0nS+BewUp3\nXqBPW1pEQmBVBsGCn5i7I0V8tmXQSgWLtxRT430o5+TRWZgxnL4=\n-----END RSA PRIVATE KEY-----"
+  }
+}
