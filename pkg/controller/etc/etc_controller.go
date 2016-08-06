@@ -6,50 +6,35 @@ import (
 	"bytes"
 	"fmt"
 	"text/template"
-	"time"
 
+	//. "github.com/ahmetalpbalkan/go-linq"
 	"github.com/golang/glog"
-
-	"sitepod.io/sitepod/pkg/api/v1"
-
-	k8s_api "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/errors"
+	//k8s_api "k8s.io/kubernetes/pkg/api"
+	//kerrors "k8s.io/kubernetes/pkg/api/errors"
+	//"k8s.io/kubernetes/pkg/api/unversioned"
+	//ext_api "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/controller/framework"
-	"k8s.io/kubernetes/pkg/util/workqueue"
-)
-
-var (
-	RetryDelay = 200 * time.Millisecond
+	//"sitepod.io/sitepod/pkg/api/v1"
+	cc "sitepod.io/sitepod/pkg/client"
+	. "sitepod.io/sitepod/pkg/controller/shared"
 )
 
 type EtcController struct {
-	sitepodInformer    framework.SharedIndexInformer
-	systemUserInformer framework.SharedIndexInformer
-	configMapGetter    v1.GetterFunc
-	configMapUpdater   v1.UpdaterFunc
-	queue              workqueue.DelayingInterface
+	SimpleController
 }
 
-func NewEtcController(sitepodInformer framework.SharedIndexInformer,
-	systemUserInformer framework.SharedIndexInformer,
-	configMapGetter v1.GetterFunc,
-	configMapUpdater v1.UpdaterFunc) framework.ControllerInterface {
+func NewEtcController(client *cc.Client) framework.ControllerInterface {
 
-	c := &EtcController{
-		sitepodInformer,
-		systemUserInformer,
-		configMapGetter,
-		configMapUpdater,
-		workqueue.NewDelayingQueue(),
-	}
-
-	systemUserInformer.AddEventHandler(framework.ResourceEventHandlerFuncs{
-		AddFunc:    c.queueAddSystemUser,
-		UpdateFunc: c.queueUpdateSystemUser,
-		DeleteFunc: c.queueDeleteSystemUser,
+	glog.Infof("Creating etc controller")
+	sc := &EtcController{*NewSimpleController(client, []Syncer{client.SystemUsers(),
+		client.ConfigMaps(), client.Sitepods()}, nil, nil)}
+	sc.SyncFunc = sc.ProcessUpdate
+	client.SystemUsers().AddInformerHandlers(framework.ResourceEventHandlerFuncs{
+		AddFunc:    sc.QueueAdd,
+		UpdateFunc: sc.QueueUpdate,
+		DeleteFunc: sc.QueueDelete,
 	})
-
-	return c
+	return sc
 }
 
 var (
@@ -57,111 +42,49 @@ var (
 )
 
 func (c *EtcController) Run(stopCh <-chan struct{}) {
-	go c.worker()
-	<-stopCh
-	c.queue.ShutDown()
+	// We want to fire a run even if there are no system users
+	c.QueueAdd(struct{}{})
+	c.SimpleController.Run(stopCh)
 }
 
-func (c *EtcController) queueAddSystemUser(obj interface{}) {
-	user := obj.(*v1.SystemUser)
-	if user.Status.AssignedFileUID > 0 {
-		for _, etcKey := range SystemUserEtcs {
-			c.queue.Add(etcKey)
-		}
-	} else {
-		// We rely on the assignment of file uid will cause a new update event so no requeue
+func (c *EtcController) QueueAdd(item interface{}) {
+	for _, etcKey := range SystemUserEtcs {
+		c.EnqueueUpdate(etcKey)
 	}
 }
 
-func (c *EtcController) queueUpdateSystemUser(old interface{}, cur interface{}) {
-	if k8s_api.Semantic.DeepEqual(old, cur) {
-		return
-	}
-	c.queueAddSystemUser(cur)
-}
-
-func (c *EtcController) queueDeleteSystemUser(obj interface{}) {
-	c.queueAddSystemUser(obj)
-}
-
-func (c *EtcController) HasSynced() bool {
-	return true
-}
-
-func (c *EtcController) worker() {
-
-	if !c.systemUserInformer.HasSynced() {
-		glog.Infof("Waiting for system users controller to sync")
-		time.Sleep(RetryDelay)
-	}
-
-	for {
-		func() {
-			key, quit := c.queue.Get()
-			if quit {
-				return
-			}
-			defer c.queue.Done(key)
-			c.syncEtc(key.(string))
-		}()
+func (c *EtcController) QueueUpdate(old interface{}, cur interface{}) {
+	if !c.Client.SystemUsers().DeepEqual(old, cur) {
+		c.QueueAdd(cur)
 	}
 }
 
-func (c *EtcController) syncEtc(key string) {
-	startTime := time.Now()
-	defer func() {
-		glog.V(4).Infof("Finished syncing etc file key %s. (%v)", key, time.Now().Sub(startTime))
-	}()
-
-	switch key {
-	case "users":
-		c.processPasswd()
-	default:
-		glog.Errorf("Unable to process unexpected key %s", key)
-	}
-
+func (c *EtcController) QueueDelete(deleted interface{}) {
+	// we rewrite etc configmaps when a user is removed so this similar as add/update
+	c.QueueAdd(deleted)
 }
 
-func (c *EtcController) processPasswd() {
+func (c *EtcController) ProcessUpdate(key string) error {
+
+	glog.Info("Rebuilding passwd and shadow content")
 	passwdContent := []string{}
 	shadowContent := []string{}
-	suStore := c.systemUserInformer.GetStore()
-	systemUserKeys := suStore.ListKeys()
-	var err error
 
-	// TODO consider how globally scoped this config map should be
-	configObj, err := c.configMapGetter("user-etcs")
+	systemUsers := c.Client.SystemUsers().List()
 
-	if err != nil {
-		if errors.IsNotFound(err) {
-			newConfigMap := &k8s_api.ConfigMap{}
-			newConfigMap.Name = "user-etcs"
-			configObj = newConfigMap
-		} else {
-			glog.Errorf("Unexpected error get user-etcs config map: %+v", err)
-			// NOTE don't requeue here we'll just wait until next full sync
-			return
-		}
+	config, exists := c.Client.ConfigMaps().MaybeGetByKey("user-etcs")
+	if !exists {
+		//TODO NewEmpty to accept minimum name or generateName?
+		config = c.Client.ConfigMaps().NewEmpty()
+		config.Name = "user-etcs"
+		glog.Info("Creating new config map user-etcs")
+	} else {
+		glog.Infof("Using existing  config map %s : %s", string(config.UID), config.GetName())
 	}
 
-	config := configObj.(*k8s_api.ConfigMap)
+	glog.Infof("Building config with %d system users", len(systemUsers))
+	for _, user := range systemUsers {
 
-	for _, systemUserKey := range systemUserKeys {
-
-		systemUserObj, exists, err := suStore.GetByKey(systemUserKey)
-
-		if err != nil || !exists {
-			glog.Errorf("Unable to get system user %s from cache", systemUserKey)
-			if err != nil {
-				break
-			}
-			glog.Infof("System user %s not longer exists in cache", systemUserKey)
-			continue
-		}
-
-		//TODO add a sitepod group - 2000
-
-		user := systemUserObj.(*v1.SystemUser)
 		passwdContent = append(passwdContent, fmt.Sprintf("%s:%s:%d:%d:%s:%s:%s\n",
 			user.GetUsername(),
 			"x", //auth method
@@ -188,57 +111,42 @@ func (c *EtcController) processPasswd() {
 				"",                 //reserved for future use
 			))
 		}
-
 	}
 
-	passwdOutput, err := processTemplate("etc_passwd", passwdContent)
-	if err != nil {
-		glog.Errorf("Unable to process passwd template: %+v", err)
-		return
-	}
+	passwdOutput := processTemplate("etc_passwd", passwdContent)
+	shadowOutput := processTemplate("etc_shadow", shadowContent)
+	groupOutput := processTemplate("etc_group", []string{})
 
-	shadowOutput, err := processTemplate("etc_shadow", shadowContent)
-	if err != nil {
-		glog.Errorf("Unable to process shadow template: %+v", err)
-		return
-	}
-
-	groupOutput, err := processTemplate("etc_group", []string{})
-	if err != nil {
-		glog.Errorf("Unable to process group template: %+v", err)
-		return
-	}
-
+	// Move to defaulters
 	if config.Labels == nil {
 		config.Labels = make(map[string]string)
 	}
-	config.Labels["config-type"] = "etc"
 	if config.Data == nil {
 		config.Data = make(map[string]string)
 	}
+
+	config.Labels["config-type"] = "etc"
 	config.Data["passwd"] = passwdOutput
 	config.Data["shadow"] = shadowOutput
 	config.Data["group"] = groupOutput
 
-	_, err = c.configMapUpdater(config)
+	glog.Infof("Updating config map %s", config.GetName())
+	c.Client.ConfigMaps().Update(config)
+	glog.Infof("Updated config map %s", config.GetName())
 
-	if err != nil {
-		glog.Errorf("Aborting writing etc file due to %+v", err)
-		//TODO test if this is an expected optimistic concurrency update conflict?
-		c.queue.AddAfter("users", RetryDelay)
-	}
-
+	return nil
 }
 
-func processTemplate(path string, data []string) (string, error) {
+func processTemplate(path string, data []string) string {
 	template, err := template.ParseFiles("../../templates/" + path)
 	if err != nil {
-		return "", err
+		panic(err)
 	}
+
 	buffer := bytes.NewBuffer([]byte{})
 	err = template.Execute(buffer, data)
 	if err != nil {
-		return "", err
+		panic(err)
 	}
-	return buffer.String(), nil
+	return buffer.String()
 }

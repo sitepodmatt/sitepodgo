@@ -36,6 +36,10 @@ type Client struct {
 
 //go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ReplicaSetClient(ext_api.ReplicaSet,ext_api.ReplicaSetList,"ReplicaSet","ReplicaSets",true,"sitepod-rs-")
 
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SystemUserClient(v1.SystemUser,v1.SystemUserList,"SystemUser","SystemUsers",true,"systemuser-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ConfigMapClient(k8s_api.ConfigMap,k8s_api.ConfigMapList,"ConfigMap","ConfigMaps",true,"sitepod-cm-")
+
 func NewClient(scheme *runtime.Scheme) *Client {
 	client := &Client{scheme: scheme}
 	client.cachedClients = make(map[string]interface{})
@@ -77,6 +81,14 @@ func (c *Client) Deployments() *DeploymentClient {
 
 func (c *Client) ReplicaSets() *ReplicaSetClient {
 	return c.usingCache("replicasets", func() interface{} { return NewReplicaSetClient(c.k8sExtRestClient, namespace) }).(*ReplicaSetClient)
+}
+
+func (c *Client) SystemUsers() *SystemUserClient {
+	return c.usingCache("systemusers", func() interface{} { return NewSystemUserClient(c.sitepodRestClient, namespace) }).(*SystemUserClient)
+}
+
+func (c *Client) ConfigMaps() *ConfigMapClient {
+	return c.usingCache("configmaps", func() interface{} { return NewConfigMapClient(c.k8sCoreRestClient, namespace) }).(*ConfigMapClient)
 }
 
 func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) *restclient.RESTClient {

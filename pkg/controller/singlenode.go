@@ -5,7 +5,7 @@ import (
 
 	"sitepod.io/sitepod/pkg/api/v1"
 	"sitepod.io/sitepod/pkg/client"
-	//"sitepod.io/sitepod/pkg/controller/etc"
+	"sitepod.io/sitepod/pkg/controller/etc"
 	//"sitepod.io/sitepod/pkg/controller/services"
 	"sitepod.io/sitepod/pkg/controller/sitepod"
 	//	"sitepod.io/sitepod/pkg/controller/systemuser"
@@ -84,12 +84,8 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 
 	cc := client.NewClient(api.Scheme)
 
-	//c.etcController = etc.NewEtcController(
-	//c.sitepodInformer,
-	//c.systemUserInformer,
-	//c.coreConcepts.ConfigMaps.Getter,
-	//c.coreConcepts.ConfigMaps.Updater)
-	//go c.etcController.Run(stopCh)
+	c.etcController = etc.NewEtcController(cc)
+	go c.etcController.Run(stopCh)
 
 	//c.servicesController = services.NewServicesController(
 	//c.servicesInformer,
@@ -110,6 +106,8 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 	go cc.PVs().StartInformer(stopCh)
 	go cc.PVClaims().StartInformer(stopCh)
 	go cc.Deployments().StartInformer(stopCh)
+	go cc.ConfigMaps().StartInformer(stopCh)
+	go cc.SystemUsers().StartInformer(stopCh)
 	glog.Infof("Started informers")
 	//c.systemUserController = systemuser.NewSystemUserController(c.sitepodInformer,
 	//c.systemUserInformer,

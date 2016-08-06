@@ -1,7 +1,9 @@
 package v1
 
 import (
+	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/unversioned"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"strings"
 )
 
@@ -33,6 +35,11 @@ type SystemUser struct {
 	ObjectMeta           `json:"metadata,omitempty"`
 	Spec                 SystemUserSpec   `json:"spec"`
 	Status               SystemUserStatus `json:"status"`
+}
+
+func (s *SystemUser) GetObjectMeta() meta.Object {
+	om := v1.ObjectMeta(s.ObjectMeta)
+	return &om
 }
 
 func (s *SystemUser) GetUsername() string {
@@ -69,4 +76,9 @@ type SystemUserList struct {
 
 func (s *SystemUserList) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
+}
+
+func (s *SystemUserList) GetListMeta() unversioned.List {
+	lm := unversioned.ListMeta(s.ListMeta)
+	return &lm
 }

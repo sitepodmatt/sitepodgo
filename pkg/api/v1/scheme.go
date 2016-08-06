@@ -29,6 +29,7 @@ func AddToScheme(s *runtime.Scheme) (string, *unversioned.GroupVersion, *unversi
 
 	s.AddKnownTypes(internalGV, &Sitepod{})
 	s.AddKnownTypes(externalGV, &Sitepod{})
+
 	s.AddKnownTypes(internalGV, &SitepodList{})
 	s.AddKnownTypes(externalGV, &SitepodList{})
 
