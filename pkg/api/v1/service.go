@@ -1,17 +1,19 @@
 package v1
 
 import (
+	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/unversioned"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
-type Serviceinstance struct {
+type AppComponent struct {
 	unversioned.TypeMeta `json:",inline"`
 	ObjectMeta           `json:"metadata,omitempty"`
-	Spec                 ServiceinstanceSpec   `json:"spec"`
-	Status               ServiceinstanceStatus `json:"status"`
+	Spec                 AppComponentSpec   `json:"spec"`
+	Status               AppComponentStatus `json:"status"`
 }
 
-type ServiceConfigFile struct {
+type AppComponentConfigFile struct {
 	Path     string `json:"path,omitempty"`
 	Template string `json:"content,omitempty"`
 	FileMode string `json:"fileMode,omitempty"`
@@ -19,32 +21,44 @@ type ServiceConfigFile struct {
 	Gid      int    `json:"gid,omitempty"`
 }
 
-type ServiceinstanceSpec struct {
-	Type           string              `json:"type,omitempty"`
-	DisplayName    string              `json:"displayName,omitempty"`
-	Image          string              `json:"image,omitempty"`
-	ImageVersion   string              `json:"imageVersion,omitempty"`
-	Description    string              `json:"description,omitempty"`
-	DataVolumeName string              `json:"dataVolumeName,omitempty"`
-	EtcMergeMode   string              `json:"etcMergeMode,omitempty"`
-	ConfigFiles    []ServiceConfigFile `json:"configFiles,omitempty"`
-	PrivateKeyPEM  string              `json:"privateKeyPEM,omitempty"`
-	PublicKeyPEM   string              `json:"publicKeyPEM,omitempty"`
+type AppComponentSpec struct {
+	Type           string                   `json:"type,omitempty"`
+	DisplayName    string                   `json:"displayName,omitempty"`
+	Image          string                   `json:"image,omitempty"`
+	ImageVersion   string                   `json:"imageVersion,omitempty"`
+	Description    string                   `json:"description,omitempty"`
+	DataVolumeName string                   `json:"dataVolumeName,omitempty"`
+	EtcMergeMode   string                   `json:"etcMergeMode,omitempty"`
+	ConfigFiles    []AppComponentConfigFile `json:"configFiles,omitempty"`
+	//TODO move these out
+	PrivateKeyPEM string `json:"privateKeyPEM,omitempty"`
+	PublicKeyPEM  string `json:"publicKeyPEM,omitempty"`
 }
 
-type ServiceinstanceStatus struct {
+type AppComponentStatus struct {
+	//TODO figure out high level conditions
 }
 
-func (s *Serviceinstance) GetObjectKind() unversioned.ObjectKind {
+func (s *AppComponent) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
 }
 
-type ServiceinstanceList struct {
+func (s *AppComponent) GetObjectMeta() meta.Object {
+	om := v1.ObjectMeta(s.ObjectMeta)
+	return &om
+}
+
+type AppComponentList struct {
 	unversioned.TypeMeta `json:",inline"`
 	ListMeta             `json:"metadata,omitempty"`
-	Items                []Serviceinstance `json:"items"`
+	Items                []AppComponent `json:"items"`
 }
 
-func (s *ServiceinstanceList) GetObjectKind() unversioned.ObjectKind {
+func (s *AppComponentList) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
+}
+
+func (s *AppComponentList) GetListMeta() unversioned.List {
+	lm := unversioned.ListMeta(s.ListMeta)
+	return &lm
 }

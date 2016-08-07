@@ -6,7 +6,7 @@ import (
 	"sitepod.io/sitepod/pkg/api/v1"
 	"sitepod.io/sitepod/pkg/client"
 	"sitepod.io/sitepod/pkg/controller/etc"
-	//"sitepod.io/sitepod/pkg/controller/services"
+	"sitepod.io/sitepod/pkg/controller/services"
 	"sitepod.io/sitepod/pkg/controller/sitepod"
 	"sitepod.io/sitepod/pkg/controller/systemuser"
 
@@ -27,7 +27,7 @@ type SingleNodeController struct {
 
 	homedirController    framework.ControllerInterface
 	sitepodController    framework.ControllerInterface
-	servicesController   framework.ControllerInterface
+	appCompController    framework.ControllerInterface
 	etcController        framework.ControllerInterface
 	systemUserController framework.ControllerInterface
 
@@ -87,16 +87,8 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 	c.etcController = etc.NewEtcController(cc)
 	go c.etcController.Run(stopCh)
 
-	//c.servicesController = services.NewServicesController(
-	//c.servicesInformer,
-	//c.sitepodInformer,
-	//c.deploymentInformer,
-	//c.pvInformer,
-	//c.configMapInformer,
-	//c.extConcepts.Deployments.Updater,
-	//c.coreConcepts.ConfigMaps.Updater,
-	//)
-	//go c.servicesController.Run(stopCh)
+	c.appCompController = services.NewAppCompController(cc)
+	go c.appCompController.Run(stopCh)
 
 	c.sitepodController = sitepod.NewSitepodController(cc)
 	go c.sitepodController.Run(stopCh)

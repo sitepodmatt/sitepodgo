@@ -124,12 +124,6 @@ func DefaultConfig() *SingleNodeConfig {
 		resyncPeriod,
 		indexers,
 	)
-	config.ServicesInformer = framework.NewSharedIndexInformer(
-		concepts.Services.ListWatcher(nil),
-		&v1.Serviceinstance{},
-		resyncPeriod,
-		indexers,
-	)
 
 	config.PvInformer = framework.NewSharedIndexInformer(
 		coreConcepts.PersistentVolumes.ListWatcher(nil),

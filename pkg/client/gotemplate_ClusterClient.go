@@ -111,7 +111,7 @@ func (c *ClusterClient) KeyOf(obj interface{}) string {
 
 //TODO: wrong location? shared?
 func (c *ClusterClient) DeepEqual(a interface{}, b interface{}) bool {
-	return reflect.DeepEqual(a, b)
+	return k8s_api.Semantic.DeepEqual(a, b)
 }
 
 func (c *ClusterClient) MaybeGetByKey(key string) (*v1.Cluster, bool) {

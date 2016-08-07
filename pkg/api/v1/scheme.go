@@ -33,10 +33,10 @@ func AddToScheme(s *runtime.Scheme) (string, *unversioned.GroupVersion, *unversi
 	s.AddKnownTypes(internalGV, &SitepodList{})
 	s.AddKnownTypes(externalGV, &SitepodList{})
 
-	s.AddKnownTypes(internalGV, &Serviceinstance{})
-	s.AddKnownTypes(externalGV, &Serviceinstance{})
-	s.AddKnownTypes(internalGV, &ServiceinstanceList{})
-	s.AddKnownTypes(externalGV, &ServiceinstanceList{})
+	s.AddKnownTypes(internalGV, &AppComponent{})
+	s.AddKnownTypes(externalGV, &AppComponent{})
+	s.AddKnownTypes(internalGV, &AppComponentList{})
+	s.AddKnownTypes(externalGV, &AppComponentList{})
 
 	s.AddKnownTypes(internalGV, &Cluster{})
 	s.AddKnownTypes(externalGV, &Cluster{})

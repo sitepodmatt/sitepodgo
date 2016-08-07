@@ -1,12 +1,18 @@
 package services
 
 // Listen for services and build deployments when the sitepod is ready with a PV
-
 import (
 	"bytes"
 	"fmt"
 	"text/template"
-	"time"
+
+	. "github.com/ahmetalpbalkan/go-linq"
+	"github.com/golang/glog"
+	k8s_api "k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/controller/framework"
+	"sitepod.io/sitepod/pkg/api/v1"
+	cc "sitepod.io/sitepod/pkg/client"
+	. "sitepod.io/sitepod/pkg/controller/shared"
 
 	"crypto/rand"
 	"crypto/rsa"
@@ -14,209 +20,99 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"golang.org/x/crypto/ssh"
-
-	"github.com/golang/glog"
-
-	"sitepod.io/sitepod/pkg/api/v1"
-
-	k8s_api "k8s.io/kubernetes/pkg/api"
-	ext_api "k8s.io/kubernetes/pkg/apis/extensions"
-	"k8s.io/kubernetes/pkg/controller/framework"
-	"k8s.io/kubernetes/pkg/util/workqueue"
 )
 
-var (
-	RetryDelay time.Duration = 200 * time.Millisecond
-)
-
-type ServicesController struct {
-	servicesInformer    framework.SharedIndexInformer
-	sitepodInformer     framework.SharedIndexInformer
-	deploymentsInformer framework.SharedIndexInformer
-	pvInformer          framework.SharedIndexInformer
-	configMapInformer   framework.SharedIndexInformer
-	deploymentUpdater   v1.UpdaterFunc
-	configMapUpdater    v1.UpdaterFunc
-	queue               workqueue.DelayingInterface
+type AppCompController struct {
+	SimpleController
 }
 
-func NewServicesController(servicesInformer framework.SharedIndexInformer,
-	sitepodInformer framework.SharedIndexInformer,
-	deploymentsInformer framework.SharedIndexInformer,
-	pvInformer framework.SharedIndexInformer,
-	configMapInformer framework.SharedIndexInformer,
-	deploymentUpdater v1.UpdaterFunc,
-	configMapUpdater v1.UpdaterFunc) framework.ControllerInterface {
+func NewAppCompController(client *cc.Client) framework.ControllerInterface {
 
-	c := &ServicesController{servicesInformer,
-		sitepodInformer,
-		deploymentsInformer,
-		pvInformer,
-		configMapInformer,
-		deploymentUpdater,
-		configMapUpdater,
-		workqueue.NewDelayingQueue(),
-	}
-
-	servicesInformer.AddEventHandler(framework.ResourceEventHandlerFuncs{
-		AddFunc:    c.addService,
-		UpdateFunc: c.updateService,
-		DeleteFunc: c.deleteService})
-
+	glog.Infof("Creating app component (appcomp) controller")
+	c := &AppCompController{*NewSimpleController(client, []Syncer{client.PVClaims(),
+		client.PVs(), client.Deployments()}, nil, nil)}
+	c.SyncFunc = c.ProcessUpdate
+	//sc.DeleteFunc = sc.ProcessDelete
+	client.AppComps().AddInformerHandlers(framework.ResourceEventHandlerFuncs{
+		AddFunc:    c.QueueAdd,
+		UpdateFunc: c.QueueUpdate,
+		DeleteFunc: c.QueueDelete,
+	})
 	return c
 }
 
-func (c *ServicesController) addService(obj interface{}) {
-	service := obj.(*v1.Serviceinstance)
-	key, _ := v1.DefaultKeyFunc(service)
-	c.queue.Add(key)
+func (c *AppCompController) QueueAdd(item interface{}) {
+	c.EnqueueUpdate(c.Client.AppComps().KeyOf(item))
 }
 
-func (c *ServicesController) updateService(old interface{}, cur interface{}) {
-	if k8s_api.Semantic.DeepEqual(old, cur) {
-		return
-	}
-	service := cur.(*v1.Serviceinstance)
-	key, _ := v1.DefaultKeyFunc(service)
-	c.queue.Add(key)
-}
-
-func (c *ServicesController) deleteService(obj interface{}) {
-	//TODO handle this seperately
-}
-
-func (c *ServicesController) Run(stopCh <-chan struct{}) {
-	go c.worker()
-	<-stopCh
-	c.queue.ShutDown()
-}
-
-func (c *ServicesController) worker() {
-
-	for !c.IsReady() {
-		time.Sleep(RetryDelay)
-	}
-
-	for {
-		func() {
-			key, quit := c.queue.Get()
-			if quit {
-				return
-			}
-			defer c.queue.Done(key)
-			c.syncService(key.(string))
-		}()
+func (c *AppCompController) QueueUpdate(old interface{}, cur interface{}) {
+	if !c.Client.AppComps().DeepEqual(old, cur) {
+		c.EnqueueUpdate(c.Client.AppComps().KeyOf(cur))
 	}
 }
 
-func (c *ServicesController) IsReady() bool {
-	return (c.servicesInformer.HasSynced() && c.sitepodInformer.HasSynced() &&
-		c.deploymentsInformer.HasSynced() && c.configMapInformer.HasSynced())
+func (c *AppCompController) QueueDelete(deleted interface{}) {
+	c.EnqueueDelete(c.Client.AppComps().KeyOf(deleted))
 }
 
-func (c *ServicesController) syncService(key string) {
+func (c *AppCompController) ProcessUpdate(key string) error {
 
-	obj, exists, err := c.servicesInformer.GetStore().GetByKey(key)
+	//TODO how we going to handle different app components
+	//for now just ssh
 
-	if err != nil {
-		glog.Errorf("Error getting service: %+v", err)
-		return
-	}
+	return c.ProcessUpdateSSH(key)
+}
+
+func (c *AppCompController) ProcessUpdateSSH(key string) error {
+
+	ac, exists := c.Client.AppComps().MaybeGetByKey(key)
 
 	if !exists {
-		glog.Errorf("Service %s no longer exists", key)
-		return
+		glog.Infof("App components %s no longer exists", key)
+		return nil
 	}
 
-	glog.Infof("Processing service instance %s", key)
-	service := obj.(*v1.Serviceinstance)
+	sitepodKey := ac.Labels["sitepod"]
+	sitepod, exists := c.Client.Sitepods().MaybeGetByKey(sitepodKey)
 
-	if service.Spec.Type == "ssh" {
-		c.syncSSHService(service, key)
-	} else {
-		glog.Errorf("Unsupported service %s for service instance %s", service.Spec.Type, service.Name)
+	if !exists {
+		glog.Infof("Sitepod %s no longer exists, skipping app comp %s", sitepodKey, ac.Name)
+		return nil
 	}
 
-}
+	deployment, exists := c.Client.Deployments().MaybeSingleBySitepodKey(sitepodKey)
 
-func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key string) {
-
-	sitepodLabel := service.Labels["sitepod"]
-
-	if sitepodLabel == "" {
-		glog.Errorf("Unexpected no sitepod label for service %s", service.Name)
-		return
+	if !exists {
+		glog.Errorf("No root deployment exists (yet) for sitepod %s: %s", sitepodKey)
+		return nil
 	}
 
-	sitepodObjs, err := c.sitepodInformer.GetIndexer().ByIndex("uid", sitepodLabel)
+	sshContainerObj, exists, _ := From(deployment.Spec.Template.Spec.Containers).Where(func(s T) (bool, error) {
+		return (s.(k8s_api.Container).Name == "sitepod-ssh"), nil
+	}).First()
 
-	if err != nil {
-		glog.Errorf("Unexpected err getting sitepod %s for service %s: %s", sitepodLabel, service.Name, err)
-		return
-	}
-
-	if len(sitepodObjs) == 0 {
-		glog.Errorf("%v", c.sitepodInformer.GetStore().ListKeys())
-		glog.Errorf("%v", c.sitepodInformer.GetIndexer().ListKeys())
-		glog.Errorf("Non-existant sitepod %s for service %s", sitepodLabel, service.Name)
-		return
-	}
-
-	sitepod := sitepodObjs[0].(*v1.Sitepod)
-
-	sitepodKey := string(sitepod.UID)
-	sitepodName := sitepod.Name
-
-	rootDeploymentObj, err := c.deploymentsInformer.GetIndexer().ByIndex("sitepod", sitepodKey)
-
-	if err != nil {
-		glog.Errorf("Error getting root deployment sitepod %s: %s", sitepodName, err)
-		return
-	}
-
-	// If we get a root deployment we presume all configs and data storage pvs are setup
-	if len(rootDeploymentObj) == 0 {
-		glog.Errorf("No root deployment exists (yet) for sitepod %s: %s", sitepodName, err)
-		return
-	}
-
-	rootDeployment := rootDeploymentObj[0].(*ext_api.Deployment)
-
+	// TODO surely we can simplify this
 	var sshContainer *k8s_api.Container
-	isNew := false
-	glog.Infof("Existing containers %d", len(rootDeployment.Spec.Template.Spec.Containers))
-	for _, container := range rootDeployment.Spec.Template.Spec.Containers {
-		if container.Name == "sitepod-ssh" {
-			glog.Infof("Updating existing ssh container for sitepod %s", sitepod.Name)
-			sshContainer = &container
-			break
-		}
+	if !exists {
+		sshContainer = &k8s_api.Container{}
+	} else {
+		sshContainer = sshContainerObj.(*k8s_api.Container)
 	}
 
-	if sshContainer == nil {
-		glog.Infof("Creating new ssh container for sitepod %s", sitepod.Name)
-		isNew = true
-		sshContainer = &k8s_api.Container{}
-	}
-	//rootPerm := int64(104)
-	//rootDeployment.Spec.Template.Spec.SecurityContext.FSGroup = &rootPerm
-	image := service.Spec.Image
-	version := service.Spec.ImageVersion
+	image := ac.Spec.Image
+	version := ac.Spec.ImageVersion
 	if image == "" {
 		image = "sitepod/sshdftp"
 	}
 	if version == "" {
 		version = "latest"
 	}
+
 	sshContainer.Image = image + ":" + version
 	sshContainer.ImagePullPolicy = k8s_api.PullAlways
-
-	//sshContainer.Command = []string{"/bin/bash"}
-	//sshContainer.Args = []string{"-c", "sleep 100d"}
-
 	sshContainer.Name = "sitepod-ssh"
 
-	if service.Spec.PrivateKeyPEM == "" {
+	if ac.Spec.PrivateKeyPEM == "" {
 		privateKey, err := rsa.GenerateKey(rand.Reader, 2014)
 		if err != nil {
 			panic(err)
@@ -241,29 +137,15 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key str
 
 		pkBytes := pub.Marshal()
 
-		service.Spec.PrivateKeyPEM = privateKeyPem
-		service.Spec.PublicKeyPEM = fmt.Sprintf("ssh-rsa %s %s", base64.StdEncoding.EncodeToString(pkBytes), "placeholder@sitepod.io")
+		ac.Spec.PrivateKeyPEM = privateKeyPem
+		ac.Spec.PublicKeyPEM = fmt.Sprintf("ssh-rsa %s %s", base64.StdEncoding.EncodeToString(pkBytes), "placeholder@sitepod.io")
 	}
 
-	rootStorageObj, err := c.pvInformer.GetIndexer().ByIndex("sitepod", sitepodKey)
-
-	if err != nil {
-		glog.Errorf("Unexpected err getting root pv for sitepod", sitepodName, err)
-		return
-	}
-
-	if len(rootStorageObj) == 0 {
-		glog.Errorf("Non-existant root pv for sitepod %s", sitepodName)
-		return
-	}
-
-	rootStorage := rootStorageObj[0].(*k8s_api.PersistentVolume)
+	//rootStorage := c.Client.PVClaims().SingleBySitepodKey(sitepodKey)
 
 	//FIX this
 	homeMounted := false
-	glog.Infof("DEBUGX: %d", len(sshContainer.VolumeMounts))
 	for _, vm := range sshContainer.VolumeMounts {
-		glog.Infof("DEBUGX: %s", vm.Name)
 		if vm.Name == "home-storage" {
 			homeMounted = true
 			break
@@ -274,20 +156,13 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key str
 		sshContainer.VolumeMounts = append(sshContainer.VolumeMounts, k8s_api.VolumeMount{
 			MountPath: "/home",
 			Name:      "home-storage",
-			//SubPath:   "home", //TODO this isn't working?  Kubernetes issue 26986
 		})
 	}
 
 	//TODO use label selector
-	configMapList := c.configMapInformer.GetStore().List()
+	configMapList := c.Client.ConfigMaps().List()
 
-	if err != nil {
-		glog.Errorf("Unable to get config maps for sitepod %s: %s", sitepodName, err)
-		return
-	}
-
-	for _, v := range configMapList {
-		configMap := v.(*k8s_api.ConfigMap)
+	for _, configMap := range configMapList {
 
 		if configMap.Labels["config-type"] != "etc" {
 			continue
@@ -314,7 +189,7 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key str
 				MountPath: "/etc/sitepod/etc",
 			})
 
-		rootDeployment.Spec.Template.Spec.Volumes = append(rootDeployment.Spec.Template.Spec.Volumes, k8s_api.Volume{
+		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, k8s_api.Volume{
 			Name: configMap.Name,
 			VolumeSource: k8s_api.VolumeSource{
 				ConfigMap: &k8s_api.ConfigMapVolumeSource{
@@ -322,23 +197,12 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key str
 
 	}
 
-	// if spec empty generate privatekey, public key
-
-	// save if changed
-
-	// generate Config Maps
-
-	configMaps, err := c.configMapInformer.GetIndexer().ByIndex("sitepod", sitepodLabel)
-
-	if err != nil {
-		glog.Errorf("Unable to get config maps for %s", sitepodLabel)
-		return
-	}
+	configMaps := c.Client.ConfigMaps().BySitepodKey(sitepodKey)
+	sitepodLabel := sitepod.Name
 
 	sshConfigMapName := sitepodLabel + "-" + "sshconfigmap"
 	var sshConfigMap *k8s_api.ConfigMap
-	for _, configMapObj := range configMaps {
-		configMap := configMapObj.(*k8s_api.ConfigMap)
+	for _, configMap := range configMaps {
 		if configMap.GetName() == sshConfigMapName {
 			sshConfigMap = configMap
 			break
@@ -356,17 +220,11 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key str
 		sshConfigMap.Data = make(map[string]string)
 	}
 
-	sshConfigMap.Data["sshdconfig"] = c.generateSshdConfig(service)
-	sshConfigMap.Data["sshhostrsakey"] = service.Spec.PrivateKeyPEM
-	sshConfigMap.Data["sshhostrsakeypub"] = service.Spec.PublicKeyPEM
+	sshConfigMap.Data["sshdconfig"] = c.generateSshdConfig(ac)
+	sshConfigMap.Data["sshhostrsakey"] = ac.Spec.PrivateKeyPEM
+	sshConfigMap.Data["sshhostrsakeypub"] = ac.Spec.PublicKeyPEM
 
-	_, err = c.configMapUpdater(sshConfigMap)
-
-	if err != nil {
-		glog.Errorf("Unable to update config map %s: %v", sshConfigMapName, err)
-		c.queue.AddAfter(key, RetryDelay)
-		return
-	}
+	c.Client.ConfigMaps().Update(sshConfigMap)
 
 	sshContainer.VolumeMounts = append(sshContainer.VolumeMounts,
 		k8s_api.VolumeMount{
@@ -375,7 +233,7 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key str
 		})
 
 	configMapVolumeInPod := false
-	for _, sv := range rootDeployment.Spec.Template.Spec.Volumes {
+	for _, sv := range deployment.Spec.Template.Spec.Volumes {
 		if sv.Name == "ssh-configmap-volume" {
 			configMapVolumeInPod = true
 			break
@@ -383,7 +241,7 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key str
 	}
 
 	if !configMapVolumeInPod {
-		rootDeployment.Spec.Template.Spec.Volumes = append(rootDeployment.Spec.Template.Spec.Volumes,
+		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes,
 			k8s_api.Volume{
 				Name: "ssh-configmap-volume",
 				VolumeSource: k8s_api.VolumeSource{
@@ -399,46 +257,37 @@ func (c *ServicesController) syncSSHService(service *v1.Serviceinstance, key str
 	}
 
 	homeStorageVolumeInPod := false
-	for _, sv := range rootDeployment.Spec.Template.Spec.Volumes {
+	for _, sv := range deployment.Spec.Template.Spec.Volumes {
 		if sv.Name == "home-storage" {
 			homeStorageVolumeInPod = true
 			break
 		}
 	}
 
+	// Find related PV for PVCLAIM
 	if !homeStorageVolumeInPod {
-		rootDeployment.Spec.Template.Spec.Volumes = append(rootDeployment.Spec.Template.Spec.Volumes,
+		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes,
 			k8s_api.Volume{
 				Name: "home-storage",
 				VolumeSource: k8s_api.VolumeSource{
 					HostPath: &k8s_api.HostPathVolumeSource{
-						Path: rootStorage.Spec.HostPath.Path + "/home",
+					//Path: rootStorage.Spec.HostPath.Path + "/home",
 					},
 				},
 			})
 	}
 
-	if isNew {
-		//TODONOW test if exist
-		rootDeployment.Spec.Template.Spec.Containers = append(rootDeployment.Spec.Template.Spec.Containers, *sshContainer)
-	}
+	//if isNew {
+	////TODONOW test if exist
+	//rootDeployment.Spec.Template.Spec.Containers = append(rootDeployment.Spec.Template.Spec.Containers, *sshContainer)
+	//}
 
 	//TODONOW: FIX
-	glog.Infof("Updating deployment %s", rootDeployment.Name)
-	_, err = c.deploymentUpdater(rootDeployment)
-	if err != nil {
-		glog.Errorf("Unable to update deployment %s: %s", rootDeployment.Name, err)
-		c.queue.AddAfter(key, RetryDelay)
-		return
-	}
-
+	c.Client.Deployments().Update(deployment)
+	return nil
 }
 
-func (c *ServicesController) HasSynced() bool {
-	return c.sitepodInformer.GetController().HasSynced()
-}
-
-func (c *ServicesController) generateSshdConfig(service *v1.Serviceinstance) string {
+func (c *AppCompController) generateSshdConfig(service *v1.AppComponent) string {
 	template, err := template.ParseFiles("../../templates/sshd_config")
 	if err != nil {
 		panic(err)

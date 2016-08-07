@@ -42,6 +42,8 @@ type Client struct {
 
 //go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ClusterClient(v1.Cluster,v1.ClusterList,"Cluster","Clusters",true,"sitepod-cluster-")
 
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" AppCompClient(v1.AppComponent,v1.AppComponentList,"AppComponent","AppComponents",true,"sitepod-appcomp-")
+
 func NewClient(scheme *runtime.Scheme) *Client {
 	client := &Client{scheme: scheme}
 	client.cachedClients = make(map[string]interface{})
@@ -95,6 +97,10 @@ func (c *Client) ConfigMaps() *ConfigMapClient {
 
 func (c *Client) Clusters() *ClusterClient {
 	return c.usingCache("clusters", func() interface{} { return NewClusterClient(c.sitepodRestClient, namespace) }).(*ClusterClient)
+}
+
+func (c *Client) AppComps() *AppCompClient {
+	return c.usingCache("appcomps", func() interface{} { return NewAppCompClient(c.sitepodRestClient, namespace) }).(*AppCompClient)
 }
 
 func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) *restclient.RESTClient {
