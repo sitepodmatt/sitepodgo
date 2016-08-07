@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"sitepod.io/sitepod/pkg/controller"
+	"sitepod.io/sitepod/pkg/system"
 )
 
 var runCmd = &cobra.Command{
@@ -11,10 +11,8 @@ var runCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 
 		stopCh := make(chan struct{})
-		c := controller.NewSingleNodeController(
-			controller.DefaultConfig())
+		c := system.NewSimpleSystem()
 		c.Run(stopCh)
-
 	},
 }
 
