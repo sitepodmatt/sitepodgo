@@ -1,7 +1,0 @@
-metadata:
-  name: counter.stable.sitepod.io
-apiVersion: extensions/v1beta1
-kind: ThirdPartyResource
-description: "A simple resource to represent an integer counter"
-versions:
-- name: v1
