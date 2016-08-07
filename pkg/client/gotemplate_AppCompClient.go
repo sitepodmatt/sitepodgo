@@ -40,7 +40,7 @@ type AppCompClient struct {
 func NewAppCompClient(rc *restclient.RESTClient, ns string) *AppCompClient {
 	c := &AppCompClient{
 		rc:            rc,
-		supportedType: reflect.TypeOf(&v1.AppComponent{}),
+		supportedType: reflect.TypeOf(&v1.Appcomponent{}),
 	}
 
 	if true {
@@ -67,7 +67,7 @@ func NewAppCompClient(rc *restclient.RESTClient, ns string) *AppCompClient {
 
 	c.informer = framework.NewSharedIndexInformer(
 		api.NewListWatchFromClient(c.rc, "AppComponents", c.ns, nil, pc),
-		&v1.AppComponent{},
+		&v1.Appcomponent{},
 		resyncPeriodAppCompClient,
 		indexers,
 	)
@@ -94,8 +94,8 @@ func (c *AppCompClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
-func (c *AppCompClient) NewEmpty() *v1.AppComponent {
-	item := &v1.AppComponent{}
+func (c *AppCompClient) NewEmpty() *v1.Appcomponent {
+	item := &v1.Appcomponent{}
 	item.GenerateName = "sitepod-appcomp-"
 	return item
 }
@@ -114,7 +114,7 @@ func (c *AppCompClient) DeepEqual(a interface{}, b interface{}) bool {
 	return k8s_api.Semantic.DeepEqual(a, b)
 }
 
-func (c *AppCompClient) MaybeGetByKey(key string) (*v1.AppComponent, bool) {
+func (c *AppCompClient) MaybeGetByKey(key string) (*v1.Appcomponent, bool) {
 
 	if !strings.Contains(key, "/") && true {
 		key = fmt.Sprintf("%s/%s", c.ns, key)
@@ -129,13 +129,13 @@ func (c *AppCompClient) MaybeGetByKey(key string) (*v1.AppComponent, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*v1.AppComponent)
+		item := iObj.(*v1.Appcomponent)
 		glog.Infof("Got %s from informer store with rv %s", "AppComponent", item.ResourceVersion)
 		return item, exists
 	}
 }
 
-func (c *AppCompClient) GetByKey(key string) *v1.AppComponent {
+func (c *AppCompClient) GetByKey(key string) *v1.Appcomponent {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
@@ -145,7 +145,7 @@ func (c *AppCompClient) GetByKey(key string) *v1.AppComponent {
 	return item
 }
 
-func (c *AppCompClient) ByIndexByKey(index string, key string) []*v1.AppComponent {
+func (c *AppCompClient) ByIndexByKey(index string, key string) []*v1.Appcomponent {
 
 	items, err := c.informer.GetIndexer().ByIndex(index, key)
 
@@ -153,18 +153,18 @@ func (c *AppCompClient) ByIndexByKey(index string, key string) []*v1.AppComponen
 		panic(err)
 	}
 
-	typedItems := []*v1.AppComponent{}
+	typedItems := []*v1.Appcomponent{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*v1.AppComponent))
+		typedItems = append(typedItems, item.(*v1.Appcomponent))
 	}
 	return typedItems
 }
 
-func (c *AppCompClient) BySitepodKey(sitepodKey string) []*v1.AppComponent {
+func (c *AppCompClient) BySitepodKey(sitepodKey string) []*v1.Appcomponent {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
-func (c *AppCompClient) MaybeSingleByUID(uid string) (*v1.AppComponent, bool) {
+func (c *AppCompClient) MaybeSingleByUID(uid string) (*v1.Appcomponent, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
 		return nil, false
@@ -173,7 +173,7 @@ func (c *AppCompClient) MaybeSingleByUID(uid string) (*v1.AppComponent, bool) {
 	}
 }
 
-func (c *AppCompClient) SingleBySitepodKey(sitepodKey string) *v1.AppComponent {
+func (c *AppCompClient) SingleBySitepodKey(sitepodKey string) *v1.Appcomponent {
 
 	items := c.BySitepodKey(sitepodKey)
 
@@ -185,7 +185,7 @@ func (c *AppCompClient) SingleBySitepodKey(sitepodKey string) *v1.AppComponent {
 
 }
 
-func (c *AppCompClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.AppComponent, bool) {
+func (c *AppCompClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Appcomponent, bool) {
 
 	items := c.BySitepodKey(sitepodKey)
 
@@ -202,7 +202,7 @@ func (c *AppCompClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.AppCompo
 
 }
 
-func (c *AppCompClient) Add(target *v1.AppComponent) *v1.AppComponent {
+func (c *AppCompClient) Add(target *v1.Appcomponent) *v1.Appcomponent {
 
 	rcReq := c.rc.Post()
 	if true {
@@ -220,12 +220,12 @@ func (c *AppCompClient) Add(target *v1.AppComponent) *v1.AppComponent {
 	if err != nil {
 		panic(err)
 	}
-	item := r.(*v1.AppComponent)
+	item := r.(*v1.Appcomponent)
 	glog.Infof("Added %s - %s (rv: %s)", "AppComponent", item.Name, item.ResourceVersion)
 	return item
 }
 
-func (c *AppCompClient) Update(target *v1.AppComponent) *v1.AppComponent {
+func (c *AppCompClient) Update(target *v1.Appcomponent) *v1.Appcomponent {
 
 	accessor, err := meta.Accessor(target)
 	if err != nil {
@@ -240,11 +240,11 @@ func (c *AppCompClient) Update(target *v1.AppComponent) *v1.AppComponent {
 	if err != nil {
 		panic(err)
 	}
-	item := replacementTarget.(*v1.AppComponent)
+	item := replacementTarget.(*v1.Appcomponent)
 	return item
 }
 
-func (c *AppCompClient) UpdateOrAdd(target *v1.AppComponent) *v1.AppComponent {
+func (c *AppCompClient) UpdateOrAdd(target *v1.Appcomponent) *v1.Appcomponent {
 
 	if len(string(target.UID)) > 0 {
 		return c.Update(target)
@@ -253,7 +253,7 @@ func (c *AppCompClient) UpdateOrAdd(target *v1.AppComponent) *v1.AppComponent {
 	}
 }
 
-func (c *AppCompClient) FetchList(s labels.Selector) []*v1.AppComponent {
+func (c *AppCompClient) FetchList(s labels.Selector) []*v1.Appcomponent {
 
 	var prc *restclient.Request
 	if !true {
@@ -268,8 +268,8 @@ func (c *AppCompClient) FetchList(s labels.Selector) []*v1.AppComponent {
 		panic(err)
 	}
 
-	target := []*v1.AppComponent{}
-	kList := rObj.(*v1.AppComponentList)
+	target := []*v1.Appcomponent{}
+	kList := rObj.(*v1.AppcomponentList)
 	for _, kItem := range kList.Items {
 		target = append(target, &kItem)
 	}
@@ -277,7 +277,7 @@ func (c *AppCompClient) FetchList(s labels.Selector) []*v1.AppComponent {
 	return target
 }
 
-func (c *AppCompClient) TryDelete(target *v1.AppComponent) error {
+func (c *AppCompClient) TryDelete(target *v1.Appcomponent) error {
 
 	var prc *restclient.Request
 	if !true {
@@ -290,7 +290,7 @@ func (c *AppCompClient) TryDelete(target *v1.AppComponent) error {
 	return err
 }
 
-func (c *AppCompClient) Delete(target *v1.AppComponent) {
+func (c *AppCompClient) Delete(target *v1.Appcomponent) {
 
 	err := c.TryDelete(target)
 
@@ -299,11 +299,11 @@ func (c *AppCompClient) Delete(target *v1.AppComponent) {
 	}
 }
 
-func (c *AppCompClient) List() []*v1.AppComponent {
+func (c *AppCompClient) List() []*v1.Appcomponent {
 	kItems := c.informer.GetStore().List()
-	target := []*v1.AppComponent{}
+	target := []*v1.Appcomponent{}
 	for _, kItem := range kItems {
-		target = append(target, kItem.(*v1.AppComponent))
+		target = append(target, kItem.(*v1.Appcomponent))
 	}
 	return target
 }

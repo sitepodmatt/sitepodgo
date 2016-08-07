@@ -287,7 +287,7 @@ func (c *AppCompController) ProcessUpdateSSH(key string) error {
 	return nil
 }
 
-func (c *AppCompController) generateSshdConfig(service *v1.AppComponent) string {
+func (c *AppCompController) generateSshdConfig(service *v1.Appcomponent) string {
 	template, err := template.ParseFiles("../../templates/sshd_config")
 	if err != nil {
 		panic(err)

@@ -33,16 +33,15 @@ func AddToScheme(s *runtime.Scheme) (string, *unversioned.GroupVersion, *unversi
 	s.AddKnownTypes(internalGV, &SitepodList{})
 	s.AddKnownTypes(externalGV, &SitepodList{})
 
-	s.AddKnownTypes(internalGV, &AppComponent{})
-	s.AddKnownTypes(externalGV, &AppComponent{})
-	s.AddKnownTypes(internalGV, &AppComponentList{})
-	s.AddKnownTypes(externalGV, &AppComponentList{})
+	s.AddKnownTypes(internalGV, &Appcomponent{})
+	s.AddKnownTypes(externalGV, &Appcomponent{})
+	s.AddKnownTypes(internalGV, &AppcomponentList{})
+	s.AddKnownTypes(externalGV, &AppcomponentList{})
 
 	s.AddKnownTypes(internalGV, &Cluster{})
 	s.AddKnownTypes(externalGV, &Cluster{})
-
-	s.AddKnownTypes(internalGV, &Counter{})
-	s.AddKnownTypes(externalGV, &Counter{})
+	s.AddKnownTypes(internalGV, &ClusterList{})
+	s.AddKnownTypes(externalGV, &ClusterList{})
 
 	//TODO k8s reflector uses api.ListOptions, can we escape this
 	//dependency without rewriting?

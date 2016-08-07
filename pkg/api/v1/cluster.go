@@ -1,7 +1,9 @@
 package v1
 
 import (
+	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/unversioned"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 type Cluster struct {
@@ -18,9 +20,14 @@ type ClusterSpec struct {
 }
 
 func (s *Cluster) NextFileUID() int {
-	//NOTE we need atomic increment here if more than one worker
+	//NOTE do we need atomic increment here if more than one worker?
 	s.Spec.FileUIDCount = s.Spec.FileUIDCount + 1
 	return s.Spec.FileUIDCount
+}
+
+func (s *Cluster) GetObjectMeta() meta.Object {
+	om := v1.ObjectMeta(s.ObjectMeta)
+	return &om
 }
 
 type ClusterStatus struct{}
@@ -37,4 +44,9 @@ type ClusterList struct {
 
 func (s *ClusterList) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
+}
+
+func (s *ClusterList) GetListMeta() unversioned.List {
+	lm := unversioned.ListMeta(s.ListMeta)
+	return &lm
 }

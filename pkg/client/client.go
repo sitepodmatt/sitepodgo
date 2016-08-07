@@ -42,7 +42,7 @@ type Client struct {
 
 //go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ClusterClient(v1.Cluster,v1.ClusterList,"Cluster","Clusters",true,"sitepod-cluster-")
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" AppCompClient(v1.AppComponent,v1.AppComponentList,"AppComponent","AppComponents",true,"sitepod-appcomp-")
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" AppCompClient(v1.Appcomponent,v1.AppcomponentList,"AppComponent","AppComponents",true,"sitepod-appcomp-")
 
 func NewClient(scheme *runtime.Scheme) *Client {
 	client := &Client{scheme: scheme}

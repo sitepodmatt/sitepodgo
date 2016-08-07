@@ -6,7 +6,10 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 )
 
-type AppComponent struct {
+//TODO third party resource dont seem to support capitalization of say appComponent
+// so for now its Appcomponent
+
+type Appcomponent struct {
 	unversioned.TypeMeta `json:",inline"`
 	ObjectMeta           `json:"metadata,omitempty"`
 	Spec                 AppComponentSpec   `json:"spec"`
@@ -39,26 +42,26 @@ type AppComponentStatus struct {
 	//TODO figure out high level conditions
 }
 
-func (s *AppComponent) GetObjectKind() unversioned.ObjectKind {
+func (s *Appcomponent) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
 }
 
-func (s *AppComponent) GetObjectMeta() meta.Object {
+func (s *Appcomponent) GetObjectMeta() meta.Object {
 	om := v1.ObjectMeta(s.ObjectMeta)
 	return &om
 }
 
-type AppComponentList struct {
+type AppcomponentList struct {
 	unversioned.TypeMeta `json:",inline"`
 	ListMeta             `json:"metadata,omitempty"`
-	Items                []AppComponent `json:"items"`
+	Items                []Appcomponent `json:"items"`
 }
 
-func (s *AppComponentList) GetObjectKind() unversioned.ObjectKind {
+func (s *AppcomponentList) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
 }
 
-func (s *AppComponentList) GetListMeta() unversioned.List {
+func (s *AppcomponentList) GetListMeta() unversioned.List {
 	lm := unversioned.ListMeta(s.ListMeta)
 	return &lm
 }
