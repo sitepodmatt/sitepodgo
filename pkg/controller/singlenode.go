@@ -8,7 +8,7 @@ import (
 	"sitepod.io/sitepod/pkg/controller/etc"
 	//"sitepod.io/sitepod/pkg/controller/services"
 	"sitepod.io/sitepod/pkg/controller/sitepod"
-	//	"sitepod.io/sitepod/pkg/controller/systemuser"
+	"sitepod.io/sitepod/pkg/controller/systemuser"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
@@ -101,6 +101,9 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 	c.sitepodController = sitepod.NewSitepodController(cc)
 	go c.sitepodController.Run(stopCh)
 
+	c.systemUserController = systemuser.NewSystemUserController(cc)
+	go c.systemUserController.Run(stopCh)
+
 	glog.Infof("Starting informers")
 	go cc.Sitepods().StartInformer(stopCh)
 	go cc.PVs().StartInformer(stopCh)
@@ -109,25 +112,7 @@ func (c *SingleNodeController) Run(stopCh <-chan struct{}) {
 	go cc.ConfigMaps().StartInformer(stopCh)
 	go cc.SystemUsers().StartInformer(stopCh)
 	glog.Infof("Started informers")
-	//c.systemUserController = systemuser.NewSystemUserController(c.sitepodInformer,
-	//c.systemUserInformer,
-	//c.pvInformer,
-	//c.concepts.Clusters.Getter,
-	//c.concepts.Clusters.Updater,
-	//c.concepts.SystemUsers.Updater,
-	//)
 
-	//go c.systemUserController.Run(stopCh)
-
-	//go c.systemUserInformer.Run(stopCh)
-	//go c.servicesInformer.Run(stopCh)
-	//go c.pvInformer.Run(stopCh)
-	//go c.podInformer.Run(stopCh)
-	//go c.deploymentInformer.Run(stopCh)
-	//go c.sitepodInformer.Run(stopCh)
-	//go c.configMapInformer.Run(stopCh)
-
-	//glog.Info("Waiting to stop")
 	<-stopCh
 	glog.Info("Stopped")
 }
