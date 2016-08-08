@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -140,7 +141,7 @@ func (c *ClientTmpl) MaybeGetByKey(key string) (*ResourceType, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*ResourceType)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", ResourceName, item.ResourceVersion)
 		return item, exists
 	}
@@ -166,7 +167,7 @@ func (c *ClientTmpl) ByIndexByKey(index string, key string) []*ResourceType {
 
 	typedItems := []*ResourceType{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*ResourceType))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -236,6 +237,14 @@ func (c *ClientTmpl) Add(target *ResourceType) *ResourceType {
 	return item
 }
 
+func (c *ClientTmpl) CloneItem(orig interface{}) *ResourceType {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*ResourceType)
+}
+
 func (c *ClientTmpl) Update(target *ResourceType) *ResourceType {
 
 	accessor, err := meta.Accessor(target)
@@ -282,7 +291,7 @@ func (c *ClientTmpl) FetchList(s labels.Selector) []*ResourceType {
 	target := []*ResourceType{}
 	kList := rObj.(*ResourceListType)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

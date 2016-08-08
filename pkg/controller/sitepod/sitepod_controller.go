@@ -28,7 +28,7 @@ type SitepodController struct {
 func NewSitepodController(client *cc.Client) framework.ControllerInterface {
 
 	glog.Infof("Creating sitepod controller")
-	sc := &SitepodController{*NewSimpleController(client, []Syncer{client.PVClaims(),
+	sc := &SitepodController{*NewSimpleController("SitepodController", client, []Syncer{client.PVClaims(),
 		client.PVs(), client.Deployments()}, nil, nil)}
 	sc.SyncFunc = sc.ProcessUpdate
 	sc.DeleteFunc = sc.ProcessDelete

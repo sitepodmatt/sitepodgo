@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -131,7 +132,7 @@ func (c *ReplicaSetClient) MaybeGetByKey(key string) (*ext_api.ReplicaSet, bool)
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*ext_api.ReplicaSet)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", "ReplicaSet", item.ResourceVersion)
 		return item, exists
 	}
@@ -157,7 +158,7 @@ func (c *ReplicaSetClient) ByIndexByKey(index string, key string) []*ext_api.Rep
 
 	typedItems := []*ext_api.ReplicaSet{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*ext_api.ReplicaSet))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -227,6 +228,14 @@ func (c *ReplicaSetClient) Add(target *ext_api.ReplicaSet) *ext_api.ReplicaSet {
 	return item
 }
 
+func (c *ReplicaSetClient) CloneItem(orig interface{}) *ext_api.ReplicaSet {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*ext_api.ReplicaSet)
+}
+
 func (c *ReplicaSetClient) Update(target *ext_api.ReplicaSet) *ext_api.ReplicaSet {
 
 	accessor, err := meta.Accessor(target)
@@ -273,7 +282,7 @@ func (c *ReplicaSetClient) FetchList(s labels.Selector) []*ext_api.ReplicaSet {
 	target := []*ext_api.ReplicaSet{}
 	kList := rObj.(*ext_api.ReplicaSetList)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

@@ -14,7 +14,7 @@ type SystemUserController struct {
 func NewSystemUserController(client *cc.Client) framework.ControllerInterface {
 
 	glog.Info("Creating system user controller")
-	sc := &SystemUserController{*NewSimpleController(client, []Syncer{client.PVClaims(),
+	sc := &SystemUserController{*NewSimpleController("SystemUserController", client, []Syncer{client.PVClaims(),
 		client.PVs(), client.Sitepods(), client.SystemUsers()}, nil, nil)}
 	sc.SyncFunc = sc.ProcessUpdate
 	//sc.DeleteFunc = sc.ProcessDelete

@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -131,7 +132,7 @@ func (c *ClusterClient) MaybeGetByKey(key string) (*v1.Cluster, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*v1.Cluster)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", "Cluster", item.ResourceVersion)
 		return item, exists
 	}
@@ -157,7 +158,7 @@ func (c *ClusterClient) ByIndexByKey(index string, key string) []*v1.Cluster {
 
 	typedItems := []*v1.Cluster{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*v1.Cluster))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -227,6 +228,14 @@ func (c *ClusterClient) Add(target *v1.Cluster) *v1.Cluster {
 	return item
 }
 
+func (c *ClusterClient) CloneItem(orig interface{}) *v1.Cluster {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*v1.Cluster)
+}
+
 func (c *ClusterClient) Update(target *v1.Cluster) *v1.Cluster {
 
 	accessor, err := meta.Accessor(target)
@@ -273,7 +282,7 @@ func (c *ClusterClient) FetchList(s labels.Selector) []*v1.Cluster {
 	target := []*v1.Cluster{}
 	kList := rObj.(*v1.ClusterList)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

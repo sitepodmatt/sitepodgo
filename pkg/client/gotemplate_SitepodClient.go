@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -131,7 +132,7 @@ func (c *SitepodClient) MaybeGetByKey(key string) (*v1.Sitepod, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*v1.Sitepod)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", "Sitepod", item.ResourceVersion)
 		return item, exists
 	}
@@ -157,7 +158,7 @@ func (c *SitepodClient) ByIndexByKey(index string, key string) []*v1.Sitepod {
 
 	typedItems := []*v1.Sitepod{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*v1.Sitepod))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -227,6 +228,14 @@ func (c *SitepodClient) Add(target *v1.Sitepod) *v1.Sitepod {
 	return item
 }
 
+func (c *SitepodClient) CloneItem(orig interface{}) *v1.Sitepod {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*v1.Sitepod)
+}
+
 func (c *SitepodClient) Update(target *v1.Sitepod) *v1.Sitepod {
 
 	accessor, err := meta.Accessor(target)
@@ -273,7 +282,7 @@ func (c *SitepodClient) FetchList(s labels.Selector) []*v1.Sitepod {
 	target := []*v1.Sitepod{}
 	kList := rObj.(*v1.SitepodList)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

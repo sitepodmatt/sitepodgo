@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -131,7 +132,7 @@ func (c *DeploymentClient) MaybeGetByKey(key string) (*ext_api.Deployment, bool)
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*ext_api.Deployment)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", "Deployment", item.ResourceVersion)
 		return item, exists
 	}
@@ -157,7 +158,7 @@ func (c *DeploymentClient) ByIndexByKey(index string, key string) []*ext_api.Dep
 
 	typedItems := []*ext_api.Deployment{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*ext_api.Deployment))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -227,6 +228,14 @@ func (c *DeploymentClient) Add(target *ext_api.Deployment) *ext_api.Deployment {
 	return item
 }
 
+func (c *DeploymentClient) CloneItem(orig interface{}) *ext_api.Deployment {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*ext_api.Deployment)
+}
+
 func (c *DeploymentClient) Update(target *ext_api.Deployment) *ext_api.Deployment {
 
 	accessor, err := meta.Accessor(target)
@@ -273,7 +282,7 @@ func (c *DeploymentClient) FetchList(s labels.Selector) []*ext_api.Deployment {
 	target := []*ext_api.Deployment{}
 	kList := rObj.(*ext_api.DeploymentList)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

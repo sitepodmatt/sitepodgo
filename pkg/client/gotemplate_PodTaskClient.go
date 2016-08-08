@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -131,7 +132,7 @@ func (c *PodTaskClient) MaybeGetByKey(key string) (*v1.Podtask, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*v1.Podtask)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", "PodTask", item.ResourceVersion)
 		return item, exists
 	}
@@ -157,7 +158,7 @@ func (c *PodTaskClient) ByIndexByKey(index string, key string) []*v1.Podtask {
 
 	typedItems := []*v1.Podtask{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*v1.Podtask))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -227,6 +228,14 @@ func (c *PodTaskClient) Add(target *v1.Podtask) *v1.Podtask {
 	return item
 }
 
+func (c *PodTaskClient) CloneItem(orig interface{}) *v1.Podtask {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*v1.Podtask)
+}
+
 func (c *PodTaskClient) Update(target *v1.Podtask) *v1.Podtask {
 
 	accessor, err := meta.Accessor(target)
@@ -273,7 +282,7 @@ func (c *PodTaskClient) FetchList(s labels.Selector) []*v1.Podtask {
 	target := []*v1.Podtask{}
 	kList := rObj.(*v1.PodtaskList)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

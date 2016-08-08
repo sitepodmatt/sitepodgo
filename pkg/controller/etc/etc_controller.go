@@ -26,7 +26,7 @@ type EtcController struct {
 func NewEtcController(client *cc.Client) framework.ControllerInterface {
 
 	glog.Infof("Creating etc controller")
-	sc := &EtcController{*NewSimpleController(client, []Syncer{client.SystemUsers(),
+	sc := &EtcController{*NewSimpleController("EtcController", client, []Syncer{client.SystemUsers(),
 		client.ConfigMaps(), client.Sitepods()}, nil, nil)}
 	sc.SyncFunc = sc.ProcessUpdate
 	client.SystemUsers().AddInformerHandlers(framework.ResourceEventHandlerFuncs{

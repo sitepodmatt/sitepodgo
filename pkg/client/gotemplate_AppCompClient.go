@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -131,7 +132,7 @@ func (c *AppCompClient) MaybeGetByKey(key string) (*v1.Appcomponent, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*v1.Appcomponent)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", "AppComponent", item.ResourceVersion)
 		return item, exists
 	}
@@ -157,7 +158,7 @@ func (c *AppCompClient) ByIndexByKey(index string, key string) []*v1.Appcomponen
 
 	typedItems := []*v1.Appcomponent{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*v1.Appcomponent))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -227,6 +228,14 @@ func (c *AppCompClient) Add(target *v1.Appcomponent) *v1.Appcomponent {
 	return item
 }
 
+func (c *AppCompClient) CloneItem(orig interface{}) *v1.Appcomponent {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*v1.Appcomponent)
+}
+
 func (c *AppCompClient) Update(target *v1.Appcomponent) *v1.Appcomponent {
 
 	accessor, err := meta.Accessor(target)
@@ -273,7 +282,7 @@ func (c *AppCompClient) FetchList(s labels.Selector) []*v1.Appcomponent {
 	target := []*v1.Appcomponent{}
 	kList := rObj.(*v1.AppcomponentList)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

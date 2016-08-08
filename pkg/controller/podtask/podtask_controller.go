@@ -23,7 +23,7 @@ type PodTaskController struct {
 func NewPodTaskController(client *cc.Client) framework.ControllerInterface {
 
 	glog.Infof("Creating podtask controller")
-	c := &PodTaskController{*NewSimpleController(client, []Syncer{client.PodTasks(),
+	c := &PodTaskController{*NewSimpleController("PodTaskController", client, []Syncer{client.PodTasks(),
 		client.Pods()}, nil, nil)}
 
 	c.SyncFunc = c.ProcessUpdate

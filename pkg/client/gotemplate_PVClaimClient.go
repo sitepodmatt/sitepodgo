@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -131,7 +132,7 @@ func (c *PVClaimClient) MaybeGetByKey(key string) (*k8s_api.PersistentVolumeClai
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*k8s_api.PersistentVolumeClaim)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", "PersistentVolumeClaim", item.ResourceVersion)
 		return item, exists
 	}
@@ -157,7 +158,7 @@ func (c *PVClaimClient) ByIndexByKey(index string, key string) []*k8s_api.Persis
 
 	typedItems := []*k8s_api.PersistentVolumeClaim{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*k8s_api.PersistentVolumeClaim))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -227,6 +228,14 @@ func (c *PVClaimClient) Add(target *k8s_api.PersistentVolumeClaim) *k8s_api.Pers
 	return item
 }
 
+func (c *PVClaimClient) CloneItem(orig interface{}) *k8s_api.PersistentVolumeClaim {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*k8s_api.PersistentVolumeClaim)
+}
+
 func (c *PVClaimClient) Update(target *k8s_api.PersistentVolumeClaim) *k8s_api.PersistentVolumeClaim {
 
 	accessor, err := meta.Accessor(target)
@@ -273,7 +282,7 @@ func (c *PVClaimClient) FetchList(s labels.Selector) []*k8s_api.PersistentVolume
 	target := []*k8s_api.PersistentVolumeClaim{}
 	kList := rObj.(*k8s_api.PersistentVolumeClaimList)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

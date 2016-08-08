@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -131,7 +132,7 @@ func (c *ConfigMapClient) MaybeGetByKey(key string) (*k8s_api.ConfigMap, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*k8s_api.ConfigMap)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", "ConfigMap", item.ResourceVersion)
 		return item, exists
 	}
@@ -157,7 +158,7 @@ func (c *ConfigMapClient) ByIndexByKey(index string, key string) []*k8s_api.Conf
 
 	typedItems := []*k8s_api.ConfigMap{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*k8s_api.ConfigMap))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -227,6 +228,14 @@ func (c *ConfigMapClient) Add(target *k8s_api.ConfigMap) *k8s_api.ConfigMap {
 	return item
 }
 
+func (c *ConfigMapClient) CloneItem(orig interface{}) *k8s_api.ConfigMap {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*k8s_api.ConfigMap)
+}
+
 func (c *ConfigMapClient) Update(target *k8s_api.ConfigMap) *k8s_api.ConfigMap {
 
 	accessor, err := meta.Accessor(target)
@@ -273,7 +282,7 @@ func (c *ConfigMapClient) FetchList(s labels.Selector) []*k8s_api.ConfigMap {
 	target := []*k8s_api.ConfigMap{}
 	kList := rObj.(*k8s_api.ConfigMapList)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

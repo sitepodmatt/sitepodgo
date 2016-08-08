@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"reflect"
@@ -131,7 +132,7 @@ func (c *PodClient) MaybeGetByKey(key string) (*k8s_api.Pod, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*k8s_api.Pod)
+		item := c.CloneItem(iObj)
 		glog.Infof("Got %s from informer store with rv %s", "Pod", item.ResourceVersion)
 		return item, exists
 	}
@@ -157,7 +158,7 @@ func (c *PodClient) ByIndexByKey(index string, key string) []*k8s_api.Pod {
 
 	typedItems := []*k8s_api.Pod{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*k8s_api.Pod))
+		typedItems = append(typedItems, c.CloneItem(item))
 	}
 	return typedItems
 }
@@ -227,6 +228,14 @@ func (c *PodClient) Add(target *k8s_api.Pod) *k8s_api.Pod {
 	return item
 }
 
+func (c *PodClient) CloneItem(orig interface{}) *k8s_api.Pod {
+	cloned, err := conversion.NewCloner().DeepCopy(orig)
+	if err != nil {
+		panic(err)
+	}
+	return cloned.(*k8s_api.Pod)
+}
+
 func (c *PodClient) Update(target *k8s_api.Pod) *k8s_api.Pod {
 
 	accessor, err := meta.Accessor(target)
@@ -273,7 +282,7 @@ func (c *PodClient) FetchList(s labels.Selector) []*k8s_api.Pod {
 	target := []*k8s_api.Pod{}
 	kList := rObj.(*k8s_api.PodList)
 	for _, kItem := range kList.Items {
-		target = append(target, &kItem)
+		target = append(target, c.CloneItem(&kItem))
 	}
 
 	return target

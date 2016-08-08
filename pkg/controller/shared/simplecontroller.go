@@ -18,6 +18,7 @@ type Syncer interface {
 }
 
 type SimpleController struct {
+	ControllerName   string
 	Client           *cc.Client
 	waitForInformers []Syncer
 	SyncFunc         func(string) error
@@ -25,10 +26,10 @@ type SimpleController struct {
 	queue            workqueue.DelayingInterface
 }
 
-func NewSimpleController(client *cc.Client, waitForInformers []Syncer,
+func NewSimpleController(name string, client *cc.Client, waitForInformers []Syncer,
 	syncFunc func(string) error, deleteFunc func(string) error) *SimpleController {
 	workQueue := workqueue.NewDelayingQueue()
-	return &SimpleController{client, waitForInformers, syncFunc, deleteFunc, workQueue}
+	return &SimpleController{name, client, waitForInformers, syncFunc, deleteFunc, workQueue}
 }
 
 func (c *SimpleController) Run(stopCh <-chan struct{}) {
@@ -87,7 +88,7 @@ func (c *SimpleController) worker() {
 								c.queue.AddAfter(item, RetryDelay)
 							}
 						}
-						glog.Errorf("Panic processing %+v: %+v", item, r)
+						glog.Errorf("%s - Panic processing %+v: %+v", c.ControllerName, item, r)
 					}
 				}()
 
@@ -95,7 +96,7 @@ func (c *SimpleController) worker() {
 				switch item.(type) {
 				case addUpdateRequest:
 					req := item.(addUpdateRequest)
-					glog.Infof("Processing update for %s", req.key)
+					glog.Infof("%s Processing update for %s", c.ControllerName, req.key)
 					if c.SyncFunc != nil {
 						err = c.SyncFunc(req.key)
 					} else {
@@ -119,7 +120,7 @@ func (c *SimpleController) worker() {
 						glog.Errorf("Rejected processing %+v: %s", item, err)
 					}
 				} else {
-					glog.Infof("Completed %+v", item)
+					glog.Infof("%s Completed %+v", c.ControllerName, item)
 				}
 
 			}()
