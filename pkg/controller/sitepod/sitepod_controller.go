@@ -124,7 +124,12 @@ func (sc *SitepodController) ProcessUpdate(key string) error {
 		return DependentResourcesNotReady{fmt.Sprintf("PVC %s exists but is not yet bound to a PV", defaultPvc)}
 	}
 
-	pv := c.PVs().GetByKey(pvClaim.Spec.VolumeName)
+	pv, exists := c.PVs().MaybeGetByKey(pvClaim.Spec.VolumeName)
+
+	if !exists {
+		return DependentResourcesNotReady{fmt.Sprintf("PV %s does not yet exist.", pvClaim.Spec.VolumeName)}
+	}
+
 	glog.Infof("Using pv %s for sitepod %s", pv.GetName(), key)
 
 	isHostPath := pv.Spec.HostPath != nil
