@@ -5,6 +5,7 @@ import (
 
 	"sitepod.io/sitepod/pkg/client"
 	"sitepod.io/sitepod/pkg/controller/etc"
+	"sitepod.io/sitepod/pkg/controller/podtask"
 	"sitepod.io/sitepod/pkg/controller/services"
 	"sitepod.io/sitepod/pkg/controller/sitepod"
 	"sitepod.io/sitepod/pkg/controller/systemuser"
@@ -51,10 +52,15 @@ func (s *SimpleSystem) Run(stopCh <-chan struct{}) {
 	systemUserController := systemuser.NewSystemUserController(cc)
 	go systemUserController.Run(stopCh)
 
+	podTaskController := podtask.NewPodTaskController(cc)
+	go podTaskController.Run(stopCh)
+
 	glog.Infof("Starting informers")
 	go cc.Sitepods().StartInformer(stopCh)
 	go cc.PVClaims().StartInformer(stopCh)
 	go cc.PVs().StartInformer(stopCh)
+	go cc.Pods().StartInformer(stopCh)
+	go cc.PodTasks().StartInformer(stopCh)
 	go cc.Deployments().StartInformer(stopCh)
 	go cc.ReplicaSets().StartInformer(stopCh)
 	go cc.SystemUsers().StartInformer(stopCh)

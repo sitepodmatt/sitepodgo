@@ -32,14 +32,16 @@ type ResouceListTypeSystemUserClient []int
 
 type SystemUserClient struct {
 	rc            *restclient.RESTClient
+	rcConfig      *restclient.Config
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewSystemUserClient(rc *restclient.RESTClient, ns string) *SystemUserClient {
+func NewSystemUserClient(rc *restclient.RESTClient, config *restclient.Config, ns string) *SystemUserClient {
 	c := &SystemUserClient{
 		rc:            rc,
+		rcConfig:      config,
 		supportedType: reflect.TypeOf(&v1.SystemUser{}),
 	}
 
@@ -306,4 +308,12 @@ func (c *SystemUserClient) List() []*v1.SystemUser {
 		target = append(target, kItem.(*v1.SystemUser))
 	}
 	return target
+}
+
+func (c *SystemUserClient) RestClient() *restclient.RESTClient {
+	return c.rc
+}
+
+func (c *SystemUserClient) RestClientConfig() *restclient.Config {
+	return c.rcConfig
 }

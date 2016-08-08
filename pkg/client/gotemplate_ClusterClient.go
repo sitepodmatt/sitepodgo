@@ -32,14 +32,16 @@ type ResouceListTypeClusterClient []int
 
 type ClusterClient struct {
 	rc            *restclient.RESTClient
+	rcConfig      *restclient.Config
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewClusterClient(rc *restclient.RESTClient, ns string) *ClusterClient {
+func NewClusterClient(rc *restclient.RESTClient, config *restclient.Config, ns string) *ClusterClient {
 	c := &ClusterClient{
 		rc:            rc,
+		rcConfig:      config,
 		supportedType: reflect.TypeOf(&v1.Cluster{}),
 	}
 
@@ -306,4 +308,12 @@ func (c *ClusterClient) List() []*v1.Cluster {
 		target = append(target, kItem.(*v1.Cluster))
 	}
 	return target
+}
+
+func (c *ClusterClient) RestClient() *restclient.RESTClient {
+	return c.rc
+}
+
+func (c *ClusterClient) RestClientConfig() *restclient.Config {
+	return c.rcConfig
 }

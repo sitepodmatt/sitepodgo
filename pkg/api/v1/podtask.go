@@ -6,7 +6,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 )
 
-type PodTask struct {
+type Podtask struct {
 	unversioned.TypeMeta `json:",inline"`
 	ObjectMeta           `json:"metadata,omitempty"`
 	Spec                 PodTaskSpec   `json:"spec"`
@@ -14,40 +14,41 @@ type PodTask struct {
 }
 
 type PodTaskSpec struct {
-	Namespace      string   `json:"namespace"`
-	PodName        string   `json:"podName"`
-	ContainerName  string   `json:"containerName",omitempty`
-	Command        []string `json:"command"`
-	TimeoutSeconds int      `json:"timeoutSeconds,omitempty"`
-	MergeErrAndOut bool     `json:"mergeErrAndOut,omitempty"`
+	Namespace     string   `json:"namespace"`
+	PodName       string   `json:"podName"`
+	ContainerName string   `json:"containerName",omitempty`
+	Command       []string `json:"command"`
+	MaxAttempts   int      `json:"mergeErrAndOut,omitempty"`
 }
 
 type PodTaskStatus struct {
-	ExitCode int    `json:"exitCode"`
-	StdErr   string `json:"stdErr"`
-	StdOut   string `json:"stdOut"`
+	Completed bool   `json:"completed"`
+	Attempts  int    `json:"attempt"`
+	ExitCode  int    `json:"exitCode"`
+	StdErr    string `json:"stdErr"`
+	StdOut    string `json:"stdOut"`
 }
 
-func (s *PodTask) GetObjectKind() unversioned.ObjectKind {
+func (s *Podtask) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
 }
 
-func (s *PodTask) GetObjectMeta() meta.Object {
+func (s *Podtask) GetObjectMeta() meta.Object {
 	om := v1.ObjectMeta(s.ObjectMeta)
 	return &om
 }
 
-type PodTaskList struct {
+type PodtaskList struct {
 	unversioned.TypeMeta `json:",inline"`
 	ListMeta             `json:"metadata,omitempty"`
-	Items                []Cluster `json:"items"`
+	Items                []Podtask `json:"items"`
 }
 
-func (s *PodTaskList) GetObjectKind() unversioned.ObjectKind {
+func (s *PodtaskList) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta
 }
 
-func (s *PodTaskList) GetListMeta() unversioned.List {
+func (s *PodtaskList) GetListMeta() unversioned.List {
 	lm := unversioned.ListMeta(s.ListMeta)
 	return &lm
 }

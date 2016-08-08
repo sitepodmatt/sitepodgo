@@ -1,0 +1,7 @@
+metadata:
+  name: podtask.stable.sitepod.io
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+description: "A resource to represent an exec job to run on a specific pod cotnainer"
+versions:
+- name: v1

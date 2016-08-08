@@ -32,14 +32,16 @@ type ResouceListTypePVClient []int
 
 type PVClient struct {
 	rc            *restclient.RESTClient
+	rcConfig      *restclient.Config
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewPVClient(rc *restclient.RESTClient, ns string) *PVClient {
+func NewPVClient(rc *restclient.RESTClient, config *restclient.Config, ns string) *PVClient {
 	c := &PVClient{
 		rc:            rc,
+		rcConfig:      config,
 		supportedType: reflect.TypeOf(&k8s_api.PersistentVolume{}),
 	}
 
@@ -306,4 +308,12 @@ func (c *PVClient) List() []*k8s_api.PersistentVolume {
 		target = append(target, kItem.(*k8s_api.PersistentVolume))
 	}
 	return target
+}
+
+func (c *PVClient) RestClient() *restclient.RESTClient {
+	return c.rc
+}
+
+func (c *PVClient) RestClientConfig() *restclient.Config {
+	return c.rcConfig
 }

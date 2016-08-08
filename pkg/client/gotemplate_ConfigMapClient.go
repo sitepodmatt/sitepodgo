@@ -32,14 +32,16 @@ type ResouceListTypeConfigMapClient []int
 
 type ConfigMapClient struct {
 	rc            *restclient.RESTClient
+	rcConfig      *restclient.Config
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewConfigMapClient(rc *restclient.RESTClient, ns string) *ConfigMapClient {
+func NewConfigMapClient(rc *restclient.RESTClient, config *restclient.Config, ns string) *ConfigMapClient {
 	c := &ConfigMapClient{
 		rc:            rc,
+		rcConfig:      config,
 		supportedType: reflect.TypeOf(&k8s_api.ConfigMap{}),
 	}
 
@@ -306,4 +308,12 @@ func (c *ConfigMapClient) List() []*k8s_api.ConfigMap {
 		target = append(target, kItem.(*k8s_api.ConfigMap))
 	}
 	return target
+}
+
+func (c *ConfigMapClient) RestClient() *restclient.RESTClient {
+	return c.rc
+}
+
+func (c *ConfigMapClient) RestClientConfig() *restclient.Config {
+	return c.rcConfig
 }

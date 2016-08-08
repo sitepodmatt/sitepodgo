@@ -20,17 +20,17 @@ import (
 )
 
 var (
-	resyncPeriodAppCompClient = 5 * time.Minute
+	resyncPeriodPodClient = 5 * time.Minute
 )
 
-func HackImportIgnoredAppCompClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
+func HackImportIgnoredPodClient(a k8s_api.Volume, b v1.Cluster, c1 ext_api.ThirdPartyResource) {
 }
 
 // template type ClientTmpl(ResourceType, ResourceListType, ResourceName, ResourcePluralName, Namespaced, DefaultGenName)
 
-type ResouceListTypeAppCompClient []int
+type ResouceListTypePodClient []int
 
-type AppCompClient struct {
+type PodClient struct {
 	rc            *restclient.RESTClient
 	rcConfig      *restclient.Config
 	ns            string
@@ -38,11 +38,11 @@ type AppCompClient struct {
 	informer      framework.SharedIndexInformer
 }
 
-func NewAppCompClient(rc *restclient.RESTClient, config *restclient.Config, ns string) *AppCompClient {
-	c := &AppCompClient{
+func NewPodClient(rc *restclient.RESTClient, config *restclient.Config, ns string) *PodClient {
+	c := &PodClient{
 		rc:            rc,
 		rcConfig:      config,
-		supportedType: reflect.TypeOf(&v1.Appcomponent{}),
+		supportedType: reflect.TypeOf(&k8s_api.Pod{}),
 	}
 
 	if true {
@@ -68,42 +68,42 @@ func NewAppCompClient(rc *restclient.RESTClient, config *restclient.Config, ns s
 	}
 
 	c.informer = framework.NewSharedIndexInformer(
-		api.NewListWatchFromClient(c.rc, "AppComponents", c.ns, nil, pc),
-		&v1.Appcomponent{},
-		resyncPeriodAppCompClient,
+		api.NewListWatchFromClient(c.rc, "Pods", c.ns, nil, pc),
+		&k8s_api.Pod{},
+		resyncPeriodPodClient,
 		indexers,
 	)
 
 	return c
 }
 
-func (c *AppCompClient) StartInformer(stopCh <-chan struct{}) {
+func (c *PodClient) StartInformer(stopCh <-chan struct{}) {
 	c.informer.Run(stopCh)
 }
 
-func (c *AppCompClient) AddInformerHandlers(reh framework.ResourceEventHandler) {
+func (c *PodClient) AddInformerHandlers(reh framework.ResourceEventHandler) {
 	if c.informer == nil {
-		panic(fmt.Sprintf("%s informer not started", "AppComponent"))
+		panic(fmt.Sprintf("%s informer not started", "Pod"))
 	}
 
 	c.informer.AddEventHandler(reh)
 }
 
-func (c *AppCompClient) HasSynced() bool {
+func (c *PodClient) HasSynced() bool {
 	if c.informer == nil {
 		return false
 	}
 	return c.informer.HasSynced()
 }
 
-func (c *AppCompClient) NewEmpty() *v1.Appcomponent {
-	item := &v1.Appcomponent{}
-	item.GenerateName = "sitepod-appcomp-"
+func (c *PodClient) NewEmpty() *k8s_api.Pod {
+	item := &k8s_api.Pod{}
+	item.GenerateName = "sitepod-pod-"
 	return item
 }
 
 //TODO: wrong location? shared?
-func (c *AppCompClient) KeyOf(obj interface{}) string {
+func (c *PodClient) KeyOf(obj interface{}) string {
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
 		panic(err)
@@ -112,11 +112,11 @@ func (c *AppCompClient) KeyOf(obj interface{}) string {
 }
 
 //TODO: wrong location? shared?
-func (c *AppCompClient) DeepEqual(a interface{}, b interface{}) bool {
+func (c *PodClient) DeepEqual(a interface{}, b interface{}) bool {
 	return k8s_api.Semantic.DeepEqual(a, b)
 }
 
-func (c *AppCompClient) MaybeGetByKey(key string) (*v1.Appcomponent, bool) {
+func (c *PodClient) MaybeGetByKey(key string) (*k8s_api.Pod, bool) {
 
 	if !strings.Contains(key, "/") && true {
 		key = fmt.Sprintf("%s/%s", c.ns, key)
@@ -131,13 +131,13 @@ func (c *AppCompClient) MaybeGetByKey(key string) (*v1.Appcomponent, bool) {
 	if iObj == nil {
 		return nil, exists
 	} else {
-		item := iObj.(*v1.Appcomponent)
-		glog.Infof("Got %s from informer store with rv %s", "AppComponent", item.ResourceVersion)
+		item := iObj.(*k8s_api.Pod)
+		glog.Infof("Got %s from informer store with rv %s", "Pod", item.ResourceVersion)
 		return item, exists
 	}
 }
 
-func (c *AppCompClient) GetByKey(key string) *v1.Appcomponent {
+func (c *PodClient) GetByKey(key string) *k8s_api.Pod {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
@@ -147,7 +147,7 @@ func (c *AppCompClient) GetByKey(key string) *v1.Appcomponent {
 	return item
 }
 
-func (c *AppCompClient) ByIndexByKey(index string, key string) []*v1.Appcomponent {
+func (c *PodClient) ByIndexByKey(index string, key string) []*k8s_api.Pod {
 
 	items, err := c.informer.GetIndexer().ByIndex(index, key)
 
@@ -155,18 +155,18 @@ func (c *AppCompClient) ByIndexByKey(index string, key string) []*v1.Appcomponen
 		panic(err)
 	}
 
-	typedItems := []*v1.Appcomponent{}
+	typedItems := []*k8s_api.Pod{}
 	for _, item := range items {
-		typedItems = append(typedItems, item.(*v1.Appcomponent))
+		typedItems = append(typedItems, item.(*k8s_api.Pod))
 	}
 	return typedItems
 }
 
-func (c *AppCompClient) BySitepodKey(sitepodKey string) []*v1.Appcomponent {
+func (c *PodClient) BySitepodKey(sitepodKey string) []*k8s_api.Pod {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
-func (c *AppCompClient) MaybeSingleByUID(uid string) (*v1.Appcomponent, bool) {
+func (c *PodClient) MaybeSingleByUID(uid string) (*k8s_api.Pod, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
 		return nil, false
@@ -175,7 +175,7 @@ func (c *AppCompClient) MaybeSingleByUID(uid string) (*v1.Appcomponent, bool) {
 	}
 }
 
-func (c *AppCompClient) SingleBySitepodKey(sitepodKey string) *v1.Appcomponent {
+func (c *PodClient) SingleBySitepodKey(sitepodKey string) *k8s_api.Pod {
 
 	items := c.BySitepodKey(sitepodKey)
 
@@ -187,7 +187,7 @@ func (c *AppCompClient) SingleBySitepodKey(sitepodKey string) *v1.Appcomponent {
 
 }
 
-func (c *AppCompClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Appcomponent, bool) {
+func (c *PodClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.Pod, bool) {
 
 	items := c.BySitepodKey(sitepodKey)
 
@@ -196,7 +196,7 @@ func (c *AppCompClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Appcompo
 	} else {
 
 		if len(items) > 1 {
-			glog.Warningf("Unexpected number of %s for sitepod %s - %d items matched", "AppComponents", sitepodKey, len(items))
+			glog.Warningf("Unexpected number of %s for sitepod %s - %d items matched", "Pods", sitepodKey, len(items))
 		}
 
 		return items[0], true
@@ -204,14 +204,14 @@ func (c *AppCompClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Appcompo
 
 }
 
-func (c *AppCompClient) Add(target *v1.Appcomponent) *v1.Appcomponent {
+func (c *PodClient) Add(target *k8s_api.Pod) *k8s_api.Pod {
 
 	rcReq := c.rc.Post()
 	if true {
 		rcReq = rcReq.Namespace(c.ns)
 	}
 
-	result := rcReq.Resource("AppComponents").Body(target).Do()
+	result := rcReq.Resource("Pods").Body(target).Do()
 
 	if err := result.Error(); err != nil {
 		panic(err)
@@ -222,12 +222,12 @@ func (c *AppCompClient) Add(target *v1.Appcomponent) *v1.Appcomponent {
 	if err != nil {
 		panic(err)
 	}
-	item := r.(*v1.Appcomponent)
-	glog.Infof("Added %s - %s (rv: %s)", "AppComponent", item.Name, item.ResourceVersion)
+	item := r.(*k8s_api.Pod)
+	glog.Infof("Added %s - %s (rv: %s)", "Pod", item.Name, item.ResourceVersion)
 	return item
 }
 
-func (c *AppCompClient) Update(target *v1.Appcomponent) *v1.Appcomponent {
+func (c *PodClient) Update(target *k8s_api.Pod) *k8s_api.Pod {
 
 	accessor, err := meta.Accessor(target)
 	if err != nil {
@@ -238,15 +238,15 @@ func (c *AppCompClient) Update(target *v1.Appcomponent) *v1.Appcomponent {
 	if true {
 		rcReq = rcReq.Namespace(c.ns)
 	}
-	replacementTarget, err := rcReq.Resource("AppComponents").Name(rName).Body(target).Do().Get()
+	replacementTarget, err := rcReq.Resource("Pods").Name(rName).Body(target).Do().Get()
 	if err != nil {
 		panic(err)
 	}
-	item := replacementTarget.(*v1.Appcomponent)
+	item := replacementTarget.(*k8s_api.Pod)
 	return item
 }
 
-func (c *AppCompClient) UpdateOrAdd(target *v1.Appcomponent) *v1.Appcomponent {
+func (c *PodClient) UpdateOrAdd(target *k8s_api.Pod) *k8s_api.Pod {
 
 	if len(string(target.UID)) > 0 {
 		return c.Update(target)
@@ -255,13 +255,13 @@ func (c *AppCompClient) UpdateOrAdd(target *v1.Appcomponent) *v1.Appcomponent {
 	}
 }
 
-func (c *AppCompClient) FetchList(s labels.Selector) []*v1.Appcomponent {
+func (c *PodClient) FetchList(s labels.Selector) []*k8s_api.Pod {
 
 	var prc *restclient.Request
 	if !true {
-		prc = c.rc.Get().Resource("AppComponents").LabelsSelectorParam(s)
+		prc = c.rc.Get().Resource("Pods").LabelsSelectorParam(s)
 	} else {
-		prc = c.rc.Get().Resource("AppComponents").Namespace(c.ns).LabelsSelectorParam(s)
+		prc = c.rc.Get().Resource("Pods").Namespace(c.ns).LabelsSelectorParam(s)
 	}
 
 	rObj, err := prc.Do().Get()
@@ -270,8 +270,8 @@ func (c *AppCompClient) FetchList(s labels.Selector) []*v1.Appcomponent {
 		panic(err)
 	}
 
-	target := []*v1.Appcomponent{}
-	kList := rObj.(*v1.AppcomponentList)
+	target := []*k8s_api.Pod{}
+	kList := rObj.(*k8s_api.PodList)
 	for _, kItem := range kList.Items {
 		target = append(target, &kItem)
 	}
@@ -279,20 +279,20 @@ func (c *AppCompClient) FetchList(s labels.Selector) []*v1.Appcomponent {
 	return target
 }
 
-func (c *AppCompClient) TryDelete(target *v1.Appcomponent) error {
+func (c *PodClient) TryDelete(target *k8s_api.Pod) error {
 
 	var prc *restclient.Request
 	if !true {
-		prc = c.rc.Delete().Resource("AppComponents").Name(target.Name)
+		prc = c.rc.Delete().Resource("Pods").Name(target.Name)
 	} else {
-		prc = c.rc.Delete().Namespace(c.ns).Resource("AppComponents").Name(target.Name)
+		prc = c.rc.Delete().Namespace(c.ns).Resource("Pods").Name(target.Name)
 	}
 
 	err := prc.Do().Error()
 	return err
 }
 
-func (c *AppCompClient) Delete(target *v1.Appcomponent) {
+func (c *PodClient) Delete(target *k8s_api.Pod) {
 
 	err := c.TryDelete(target)
 
@@ -301,19 +301,19 @@ func (c *AppCompClient) Delete(target *v1.Appcomponent) {
 	}
 }
 
-func (c *AppCompClient) List() []*v1.Appcomponent {
+func (c *PodClient) List() []*k8s_api.Pod {
 	kItems := c.informer.GetStore().List()
-	target := []*v1.Appcomponent{}
+	target := []*k8s_api.Pod{}
 	for _, kItem := range kItems {
-		target = append(target, kItem.(*v1.Appcomponent))
+		target = append(target, kItem.(*k8s_api.Pod))
 	}
 	return target
 }
 
-func (c *AppCompClient) RestClient() *restclient.RESTClient {
+func (c *PodClient) RestClient() *restclient.RESTClient {
 	return c.rc
 }
 
-func (c *AppCompClient) RestClientConfig() *restclient.Config {
+func (c *PodClient) RestClientConfig() *restclient.Config {
 	return c.rcConfig
 }

@@ -57,7 +57,3 @@ func (s *SitepodList) GetListMeta() unversioned.List {
 	lm := unversioned.ListMeta(s.ListMeta)
 	return &lm
 }
-
-//func (s *SitepodList) GetListMeta() .List {
-//return &s.ListMeta
-//}

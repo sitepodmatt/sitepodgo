@@ -32,14 +32,16 @@ type ResouceListTypeSitepodClient []int
 
 type SitepodClient struct {
 	rc            *restclient.RESTClient
+	rcConfig      *restclient.Config
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewSitepodClient(rc *restclient.RESTClient, ns string) *SitepodClient {
+func NewSitepodClient(rc *restclient.RESTClient, config *restclient.Config, ns string) *SitepodClient {
 	c := &SitepodClient{
 		rc:            rc,
+		rcConfig:      config,
 		supportedType: reflect.TypeOf(&v1.Sitepod{}),
 	}
 
@@ -306,4 +308,12 @@ func (c *SitepodClient) List() []*v1.Sitepod {
 		target = append(target, kItem.(*v1.Sitepod))
 	}
 	return target
+}
+
+func (c *SitepodClient) RestClient() *restclient.RESTClient {
+	return c.rc
+}
+
+func (c *SitepodClient) RestClientConfig() *restclient.Config {
+	return c.rcConfig
 }

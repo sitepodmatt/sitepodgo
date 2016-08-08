@@ -41,14 +41,16 @@ const DefaultGenName = "sitepod-x-"
 
 type ClientTmpl struct {
 	rc            *restclient.RESTClient
+	rcConfig      *restclient.Config
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewClientTmpl(rc *restclient.RESTClient, ns string) *ClientTmpl {
+func NewClientTmpl(rc *restclient.RESTClient, config *restclient.Config, ns string) *ClientTmpl {
 	c := &ClientTmpl{
 		rc:            rc,
+		rcConfig:      config,
 		supportedType: reflect.TypeOf(&ResourceType{}),
 	}
 
@@ -315,4 +317,12 @@ func (c *ClientTmpl) List() []*ResourceType {
 		target = append(target, kItem.(*ResourceType))
 	}
 	return target
+}
+
+func (c *ClientTmpl) RestClient() *restclient.RESTClient {
+	return c.rc
+}
+
+func (c *ClientTmpl) RestClientConfig() *restclient.Config {
+	return c.rcConfig
 }

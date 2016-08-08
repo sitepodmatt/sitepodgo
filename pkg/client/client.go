@@ -17,44 +17,29 @@ var (
 )
 
 type Client struct {
-	scheme            *runtime.Scheme
-	serializer        runtime.NegotiatedSerializer
-	sitepodRestClient *restclient.RESTClient
-	k8sCoreRestClient *restclient.RESTClient
-	k8sExtRestClient  *restclient.RESTClient
-	cachedClients     map[string]interface{}
-	cachedClientMutex sync.Mutex
+	scheme                  *runtime.Scheme
+	serializer              runtime.NegotiatedSerializer
+	sitepodRestClient       *restclient.RESTClient
+	k8sCoreRestClient       *restclient.RESTClient
+	k8sExtRestClient        *restclient.RESTClient
+	sitepodRestClientConfig *restclient.Config
+	k8sCoreRestClientConfig *restclient.Config
+	k8sExtRestClientConfig  *restclient.Config
+	cachedClients           map[string]interface{}
+	cachedClientMutex       sync.Mutex
 }
 
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SitepodClient(v1.Sitepod,v1.SitepodList,"Sitepod","Sitepods",true,"sitepod-")
-
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClaimClient(k8s_api.PersistentVolumeClaim,k8s_api.PersistentVolumeClaimList,"PersistentVolumeClaim","PersistentVolumeClaims",true,"sitepod-pvc-")
-
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClient(k8s_api.PersistentVolume,k8s_api.PersistentVolumeList,"PersistentVolume","PersistentVolumes",false,"sitepod-pv-")
-
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" DeploymentClient(ext_api.Deployment,ext_api.DeploymentList,"Deployment","Deployments",true,"sitepod-deployment-")
-
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ReplicaSetClient(ext_api.ReplicaSet,ext_api.ReplicaSetList,"ReplicaSet","ReplicaSets",true,"sitepod-rs-")
-
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SystemUserClient(v1.SystemUser,v1.SystemUserList,"SystemUser","SystemUsers",true,"systemuser-")
-
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ConfigMapClient(k8s_api.ConfigMap,k8s_api.ConfigMapList,"ConfigMap","ConfigMaps",true,"sitepod-cm-")
-
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ClusterClient(v1.Cluster,v1.ClusterList,"Cluster","Clusters",true,"sitepod-cluster-")
-
-//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" AppCompClient(v1.Appcomponent,v1.AppcomponentList,"AppComponent","AppComponents",true,"sitepod-appcomp-")
-
 func NewClient(scheme *runtime.Scheme) *Client {
-	client := &Client{scheme: scheme}
-	client.cachedClients = make(map[string]interface{})
-	client.serializer = serializer.NewCodecFactory(scheme)
+	c := &Client{scheme: scheme}
+	c.cachedClients = make(map[string]interface{})
+	c.serializer = serializer.NewCodecFactory(scheme)
 
 	sitepodGroupVersion := &unversioned.GroupVersion{"stable.sitepod.io", "v1"}
-	client.sitepodRestClient = client.buildRestClient("apis", sitepodGroupVersion)
-	client.k8sCoreRestClient = client.buildRestClient("api", &k8s_v1.SchemeGroupVersion)
-	client.k8sExtRestClient = client.buildRestClient("apis", &ext_v1.SchemeGroupVersion)
+	c.sitepodRestClient, c.sitepodRestClientConfig = c.buildRestClient("apis", sitepodGroupVersion)
+	c.k8sCoreRestClient, c.k8sCoreRestClientConfig = c.buildRestClient("api", &k8s_v1.SchemeGroupVersion)
+	c.k8sExtRestClient, c.k8sExtRestClientConfig = c.buildRestClient("apis", &ext_v1.SchemeGroupVersion)
 
-	return client
+	return c
 }
 
 func (c *Client) usingCache(key string, fn func() interface{}) interface{} {
@@ -68,42 +53,72 @@ func (c *Client) usingCache(key string, fn func() interface{}) interface{} {
 }
 
 func (c *Client) Sitepods() *SitepodClient {
-	return c.usingCache("sitepods", func() interface{} { return NewSitepodClient(c.sitepodRestClient, namespace) }).(*SitepodClient)
+	return c.usingCache("sitepods", func() interface{} {
+		return NewSitepodClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+	}).(*SitepodClient)
 }
 
 func (c *Client) PVClaims() *PVClaimClient {
-	return c.usingCache("pvclaims", func() interface{} { return NewPVClaimClient(c.k8sCoreRestClient, namespace) }).(*PVClaimClient)
+	return c.usingCache("pvclaims", func() interface{} {
+		return NewPVClaimClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, namespace)
+	}).(*PVClaimClient)
 }
 
 func (c *Client) PVs() *PVClient {
-	return c.usingCache("pvs", func() interface{} { return NewPVClient(c.k8sCoreRestClient, namespace) }).(*PVClient)
+	return c.usingCache("pvs", func() interface{} {
+		return NewPVClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, namespace)
+	}).(*PVClient)
+}
+
+func (c *Client) Pods() *PodClient {
+	return c.usingCache("pods", func() interface{} {
+		return NewPodClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, namespace)
+	}).(*PodClient)
 }
 
 func (c *Client) Deployments() *DeploymentClient {
-	return c.usingCache("deployments", func() interface{} { return NewDeploymentClient(c.k8sExtRestClient, namespace) }).(*DeploymentClient)
+	return c.usingCache("deployments", func() interface{} {
+		return NewDeploymentClient(c.k8sExtRestClient, c.k8sExtRestClientConfig, namespace)
+	}).(*DeploymentClient)
 }
 
 func (c *Client) ReplicaSets() *ReplicaSetClient {
-	return c.usingCache("replicasets", func() interface{} { return NewReplicaSetClient(c.k8sExtRestClient, namespace) }).(*ReplicaSetClient)
+	return c.usingCache("replicasets", func() interface{} {
+		return NewReplicaSetClient(c.k8sExtRestClient, c.k8sExtRestClientConfig, namespace)
+	}).(*ReplicaSetClient)
 }
 
 func (c *Client) SystemUsers() *SystemUserClient {
-	return c.usingCache("systemusers", func() interface{} { return NewSystemUserClient(c.sitepodRestClient, namespace) }).(*SystemUserClient)
+	return c.usingCache("systemusers", func() interface{} {
+		return NewSystemUserClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+	}).(*SystemUserClient)
 }
 
 func (c *Client) ConfigMaps() *ConfigMapClient {
-	return c.usingCache("configmaps", func() interface{} { return NewConfigMapClient(c.k8sCoreRestClient, namespace) }).(*ConfigMapClient)
+	return c.usingCache("configmaps", func() interface{} {
+		return NewConfigMapClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, namespace)
+	}).(*ConfigMapClient)
 }
 
 func (c *Client) Clusters() *ClusterClient {
-	return c.usingCache("clusters", func() interface{} { return NewClusterClient(c.sitepodRestClient, namespace) }).(*ClusterClient)
+	return c.usingCache("clusters", func() interface{} {
+		return NewClusterClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+	}).(*ClusterClient)
 }
 
 func (c *Client) AppComps() *AppCompClient {
-	return c.usingCache("appcomps", func() interface{} { return NewAppCompClient(c.sitepodRestClient, namespace) }).(*AppCompClient)
+	return c.usingCache("appcomps", func() interface{} {
+		return NewAppCompClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+	}).(*AppCompClient)
 }
 
-func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) *restclient.RESTClient {
+func (c *Client) PodTasks() *PodTaskClient {
+	return c.usingCache("podtasks", func() interface{} {
+		return NewPodTaskClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+	}).(*PodTaskClient)
+}
+
+func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) (*restclient.RESTClient, *restclient.Config) {
 
 	rcConfig := &restclient.Config{
 		Host:    hostPath,
@@ -120,5 +135,27 @@ func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) *
 		panic(err)
 	}
 
-	return rc
+	return rc, rcConfig
 }
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SitepodClient(v1.Sitepod,v1.SitepodList,"Sitepod","Sitepods",true,"sitepod-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClaimClient(k8s_api.PersistentVolumeClaim,k8s_api.PersistentVolumeClaimList,"PersistentVolumeClaim","PersistentVolumeClaims",true,"sitepod-pvc-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PVClient(k8s_api.PersistentVolume,k8s_api.PersistentVolumeList,"PersistentVolume","PersistentVolumes",false,"sitepod-pv-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PodClient(k8s_api.Pod,k8s_api.PodList,"Pod","Pods",true,"sitepod-pod-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" DeploymentClient(ext_api.Deployment,ext_api.DeploymentList,"Deployment","Deployments",true,"sitepod-deployment-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ReplicaSetClient(ext_api.ReplicaSet,ext_api.ReplicaSetList,"ReplicaSet","ReplicaSets",true,"sitepod-rs-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SystemUserClient(v1.SystemUser,v1.SystemUserList,"SystemUser","SystemUsers",true,"systemuser-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ConfigMapClient(k8s_api.ConfigMap,k8s_api.ConfigMapList,"ConfigMap","ConfigMaps",true,"sitepod-cm-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ClusterClient(v1.Cluster,v1.ClusterList,"Cluster","Clusters",true,"sitepod-cluster-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" AppCompClient(v1.Appcomponent,v1.AppcomponentList,"AppComponent","AppComponents",true,"sitepod-appcomp-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PodTaskClient(v1.Podtask,v1.PodtaskList,"PodTask","PodTasks",true,"sitepod-podtask-")

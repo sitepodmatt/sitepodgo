@@ -1,11 +1,10 @@
 package shared
 
 import (
-	//"github.com/golang/glog"
-
 	"github.com/golang/glog"
 	kerrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/util/workqueue"
+	"reflect"
 	cc "sitepod.io/sitepod/pkg/client"
 	"time"
 )
@@ -42,9 +41,15 @@ func (c *SimpleController) EnqueueUpdate(key string) {
 	glog.Infof("Enqueuing for update %s", key)
 	c.queue.Add(addUpdateRequest{key})
 }
+
 func (c *SimpleController) EnqueueDelete(key string) {
 	glog.Infof("Enqueuing for delete %s", key)
 	c.queue.Add(deleteRequest{key})
+}
+
+func (c *SimpleController) EnqueueUpdateAfter(key string, seconds int) {
+	glog.Infof("Enqueuing for update %s after %d seconds", key, seconds)
+	c.queue.AddAfter(addUpdateRequest{key}, time.Second*time.Duration(seconds))
 }
 
 func (c *SimpleController) HasSynced() bool {
@@ -129,6 +134,7 @@ func (c *SimpleController) WaitReady() {
 		glog.Infof("Waiting for dependencies to be ready")
 		for _, di := range c.waitForInformers {
 			if !di.HasSynced() {
+				glog.Infof("Informer not ready: %s", reflect.TypeOf(di).Elem().Name())
 				allReady = false
 				break
 			}

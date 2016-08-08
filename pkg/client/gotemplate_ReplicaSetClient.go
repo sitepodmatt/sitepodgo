@@ -32,14 +32,16 @@ type ResouceListTypeReplicaSetClient []int
 
 type ReplicaSetClient struct {
 	rc            *restclient.RESTClient
+	rcConfig      *restclient.Config
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewReplicaSetClient(rc *restclient.RESTClient, ns string) *ReplicaSetClient {
+func NewReplicaSetClient(rc *restclient.RESTClient, config *restclient.Config, ns string) *ReplicaSetClient {
 	c := &ReplicaSetClient{
 		rc:            rc,
+		rcConfig:      config,
 		supportedType: reflect.TypeOf(&ext_api.ReplicaSet{}),
 	}
 
@@ -306,4 +308,12 @@ func (c *ReplicaSetClient) List() []*ext_api.ReplicaSet {
 		target = append(target, kItem.(*ext_api.ReplicaSet))
 	}
 	return target
+}
+
+func (c *ReplicaSetClient) RestClient() *restclient.RESTClient {
+	return c.rc
+}
+
+func (c *ReplicaSetClient) RestClientConfig() *restclient.Config {
+	return c.rcConfig
 }

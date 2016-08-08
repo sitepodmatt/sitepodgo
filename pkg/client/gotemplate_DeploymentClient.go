@@ -32,14 +32,16 @@ type ResouceListTypeDeploymentClient []int
 
 type DeploymentClient struct {
 	rc            *restclient.RESTClient
+	rcConfig      *restclient.Config
 	ns            string
 	supportedType reflect.Type
 	informer      framework.SharedIndexInformer
 }
 
-func NewDeploymentClient(rc *restclient.RESTClient, ns string) *DeploymentClient {
+func NewDeploymentClient(rc *restclient.RESTClient, config *restclient.Config, ns string) *DeploymentClient {
 	c := &DeploymentClient{
 		rc:            rc,
+		rcConfig:      config,
 		supportedType: reflect.TypeOf(&ext_api.Deployment{}),
 	}
 
@@ -306,4 +308,12 @@ func (c *DeploymentClient) List() []*ext_api.Deployment {
 		target = append(target, kItem.(*ext_api.Deployment))
 	}
 	return target
+}
+
+func (c *DeploymentClient) RestClient() *restclient.RESTClient {
+	return c.rc
+}
+
+func (c *DeploymentClient) RestClientConfig() *restclient.Config {
+	return c.rcConfig
 }
