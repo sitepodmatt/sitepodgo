@@ -28,6 +28,7 @@ type SystemUserSpec struct {
 type SystemUserStatus struct {
 	AssignedFileUID int  `json:"assignedFileUID,omitempty"`
 	HomeDirCreated  bool `json:"homeDirCreated,omitempty"`
+	HomeProvisioned bool `json:"homeProvisioned,omitempty"`
 }
 
 type SystemUser struct {

@@ -14,11 +14,14 @@ type Podtask struct {
 }
 
 type PodTaskSpec struct {
-	Namespace     string   `json:"namespace"`
-	PodName       string   `json:"podName"`
-	ContainerName string   `json:"containerName",omitempty`
-	Command       []string `json:"command"`
-	MaxAttempts   int      `json:"mergeErrAndOut,omitempty"`
+	Namespace       string   `json:"namespace"`
+	PodName         string   `json:"podName"`
+	ContainerName   string   `json:"containerName",omitempty`
+	Command         []string `json:"command"`
+	MaxAttempts     int      `json:"mergeErrAndOut,omitempty"`
+	BehalfType      string   `json:"behalfType,omitempty"`
+	BehalfOf        string   `json:"behalfOf,omitempty"`
+	BehalfCondition string   `json:"behalfCondition,omitempty"`
 }
 
 type PodTaskStatus struct {

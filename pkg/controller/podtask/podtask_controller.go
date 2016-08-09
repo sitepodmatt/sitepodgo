@@ -37,6 +37,10 @@ func NewPodTaskController(client *cc.Client) framework.ControllerInterface {
 
 }
 
+type Conditionable interface {
+	SetCondition(string, bool)
+}
+
 func (c *PodTaskController) QueueAdd(item interface{}) {
 	c.EnqueueUpdate(c.Client.PodTasks().KeyOf(item))
 }
@@ -68,24 +72,53 @@ func (c *PodTaskController) ProcessUpdate(key string) error {
 
 	stdOut, stdErr, err := c.Execute(podTask.Spec.PodName, podTask.Spec.ContainerName, podTask.Spec.Command)
 
+	podTask.Status.Attempts = podTask.Status.Attempts + 1
 	if err != nil {
 		// UPDATE status retried
-		podTask.Status.Attempts = podTask.Status.Attempts + 1
 		podTask.Status.ExitCode = 2                     //how do we get this?
 		podTask.Status.StdErr = fmt.Sprintf("%+v", err) // eek
 		podTask.Status.StdOut = ""
 		c.Client.PodTasks().Update(podTask)
 		c.EnqueueUpdateAfter(key, 15)
+
 	} else {
 
 		glog.Infof("PodTask %s succeeded. Stdout: %s, Stderr: %s", podTask.Name, stdOut, stdErr)
 
-		podTask.Status.Attempts = podTask.Status.Attempts + 1
 		podTask.Status.Completed = true
 		podTask.Status.ExitCode = 0
 		podTask.Status.StdOut = stdOut
 		podTask.Status.StdErr = stdErr
 		c.Client.PodTasks().Update(podTask)
+
+		if len(podTask.Spec.BehalfOf) > 0 {
+
+			behalfItem, err := c.Client.Sitepods().RestClient().Get().Resource(podTask.Spec.BehalfType).
+				Namespace(podTask.Namespace).Name(podTask.Spec.BehalfOf).Do().Get()
+
+			if err != nil || behalfItem == nil {
+				glog.Infof("Behalf of %s resource %s:%s unable to get (err: %+v)", podTask.Spec.BehalfType,
+					podTask.Namespace, podTask.Spec.BehalfOf, err)
+				return err
+			}
+
+			if conditionable, ok := behalfItem.(Conditionable); ok {
+				conditionable.SetCondition(podTask.Spec.BehalfCondition, true)
+			} else {
+				glog.Warningf("Behalf of %s resource %s:%s is not conditionable.", podTask.Spec.BehalfType,
+					podTask.Namespace, podTask.Spec.BehalfOf)
+			}
+
+			err = c.Client.Sitepods().RestClient().Put().Resource(podTask.Spec.BehalfType).
+				Namespace(podTask.Namespace).Name(podTask.Spec.BehalfOf).Body(behalfItem).Do().Error()
+
+			if err != nil {
+				glog.Errorf("Behalf of %s resource %s:%s unable to update.", podTask.Spec.BehalfType,
+					podTask.Namespace, podTask.Spec.BehalfOf)
+				return err
+			}
+		}
+
 	}
 
 	return nil

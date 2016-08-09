@@ -72,69 +72,27 @@ func (c *SystemUserController) ProcessUpdate(key string) error {
 		c.Client.Clusters().UpdateOrAdd(cluster)
 
 		user.Status.AssignedFileUID = assignedFileUID
+		c.Client.SystemUsers().Update(user)
 	}
 
-	c.Client.SystemUsers().Update(user)
+	if !user.Status.HomeProvisioned {
+
+		podTask := c.Client.PodTasks().NewEmpty()
+		//TODO this is highly insecure
+		podTask.Spec.Command = []string{"mkdir", "-p", "/home/" + user.Spec.Username}
+		// TODO chmod
+
+		pod, exists := c.Client.Pods().MaybeSingleBySitepodKey(sitepodKey)
+		if !exists {
+			return nil
+		}
+
+		podTask.Spec.PodName = pod.GetName()
+		podTask.Spec.ContainerName = "sitepod-manager"
+		podTask.Spec.Namespace = pod.GetNamespace()
+		c.Client.PodTasks().Add(podTask)
+	}
 	return nil
-
-	// TODO find an active pod hosting the PV, send an exec
-	// via api-server using websockers
-
-	//if !user.Status.HomeDirCreated {
-	////FUTURE: create internalPVjob
-	//sitepodKey := user.Labels["sitepod"]
-
-	//if len(sitepodKey) == 0 {
-	//glog.Errorf("User %s has no label for sitepod", userName)
-	//return
-	//}
-
-	//pvObjs, err := c.pvInformer.GetIndexer().ByIndex("sitepod", sitepodKey)
-
-	//if err != nil || len(pvObjs) == 0 {
-	//glog.Errorf("Unexpected error unable to get PV for sitepod %s", sitepodKey)
-	//return
-	//}
-
-	//pv := pvObjs[0].(*k8s_api.PersistentVolume)
-
-	//if pv.Annotations["must-provision"] == "true" {
-	//time.Sleep(200 * time.Millisecond)
-	//glog.Errorf("Underlying persistent volume not yet ready")
-	//c.queue.Add(key)
-	//return
-	//}
-
-	//rootDataDir := pv.Spec.HostPath.Path
-	//homeRoot := "/home/"
-	//homeDir := path.Join(rootDataDir, homeRoot, user.GetUsername())
-
-	//_, err = os.Stat(homeDir)
-	//if err != nil {
-	//err = os.RemoveAll(homeDir)
-	//}
-
-	//if err != nil {
-	//glog.Errorf("Problem sorting directory: %s", err)
-	//return
-	//}
-
-	//err = os.Mkdir(homeDir, 0755)
-	//if err == nil {
-	//err = os.Chown(homeDir, user.Status.AssignedFileUID, 2000)
-	//}
-	//if err != nil {
-	//glog.Errorf("Unable to create home dir for user %s: %v", userName, err)
-	//go func() {
-	//glog.Infof("Perhaps just recently recreated %s", userName)
-	//time.Sleep(1 * time.Second)
-	//c.queue.Add(key)
-	//}()
-	//return
-	//}
-	//user.Status.HomeDirCreated = true
-	//userChanged = true
-	//}
 
 }
 
