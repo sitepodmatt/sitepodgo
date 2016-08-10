@@ -10,8 +10,13 @@ var runCmd = &cobra.Command{
 	Short: "run in server mode",
 	Run: func(cmd *cobra.Command, args []string) {
 
+		config := &system.SimpleConfig{
+			ApiServer: cmd.Flag("apiserver").Value.String(),
+			Namespace: cmd.Flag("namespace").Value.String(),
+		}
+
 		stopCh := make(chan struct{})
-		c := system.NewSimpleSystem()
+		c := system.NewSimpleSystem(config)
 		c.Run(stopCh)
 	},
 }

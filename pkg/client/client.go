@@ -10,13 +10,13 @@ import (
 	"sync"
 )
 
-//TODO: inject as host configuration
-var (
-	hostPath  = "http://127.0.0.1:8080"
-	namespace = "default"
-)
+type ClientConfig struct {
+	ApiServer string
+	Namespace string
+}
 
 type Client struct {
+	config                  *ClientConfig
 	scheme                  *runtime.Scheme
 	serializer              runtime.NegotiatedSerializer
 	sitepodRestClient       *restclient.RESTClient
@@ -29,8 +29,8 @@ type Client struct {
 	cachedClientMutex       sync.Mutex
 }
 
-func NewClient(scheme *runtime.Scheme) *Client {
-	c := &Client{scheme: scheme}
+func NewClient(scheme *runtime.Scheme, config *ClientConfig) *Client {
+	c := &Client{scheme: scheme, config: config}
 	c.cachedClients = make(map[string]interface{})
 	c.serializer = serializer.NewCodecFactory(scheme)
 
@@ -54,74 +54,74 @@ func (c *Client) usingCache(key string, fn func() interface{}) interface{} {
 
 func (c *Client) Sitepods() *SitepodClient {
 	return c.usingCache("sitepods", func() interface{} {
-		return NewSitepodClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+		return NewSitepodClient(c.sitepodRestClient, c.sitepodRestClientConfig, c.config.Namespace)
 	}).(*SitepodClient)
 }
 
 func (c *Client) PVClaims() *PVClaimClient {
 	return c.usingCache("pvclaims", func() interface{} {
-		return NewPVClaimClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, namespace)
+		return NewPVClaimClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, c.config.Namespace)
 	}).(*PVClaimClient)
 }
 
 func (c *Client) PVs() *PVClient {
 	return c.usingCache("pvs", func() interface{} {
-		return NewPVClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, namespace)
+		return NewPVClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, c.config.Namespace)
 	}).(*PVClient)
 }
 
 func (c *Client) Pods() *PodClient {
 	return c.usingCache("pods", func() interface{} {
-		return NewPodClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, namespace)
+		return NewPodClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, c.config.Namespace)
 	}).(*PodClient)
 }
 
 func (c *Client) Deployments() *DeploymentClient {
 	return c.usingCache("deployments", func() interface{} {
-		return NewDeploymentClient(c.k8sExtRestClient, c.k8sExtRestClientConfig, namespace)
+		return NewDeploymentClient(c.k8sExtRestClient, c.k8sExtRestClientConfig, c.config.Namespace)
 	}).(*DeploymentClient)
 }
 
 func (c *Client) ReplicaSets() *ReplicaSetClient {
 	return c.usingCache("replicasets", func() interface{} {
-		return NewReplicaSetClient(c.k8sExtRestClient, c.k8sExtRestClientConfig, namespace)
+		return NewReplicaSetClient(c.k8sExtRestClient, c.k8sExtRestClientConfig, c.config.Namespace)
 	}).(*ReplicaSetClient)
 }
 
 func (c *Client) SystemUsers() *SystemUserClient {
 	return c.usingCache("systemusers", func() interface{} {
-		return NewSystemUserClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+		return NewSystemUserClient(c.sitepodRestClient, c.sitepodRestClientConfig, c.config.Namespace)
 	}).(*SystemUserClient)
 }
 
 func (c *Client) ConfigMaps() *ConfigMapClient {
 	return c.usingCache("configmaps", func() interface{} {
-		return NewConfigMapClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, namespace)
+		return NewConfigMapClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, c.config.Namespace)
 	}).(*ConfigMapClient)
 }
 
 func (c *Client) Clusters() *ClusterClient {
 	return c.usingCache("clusters", func() interface{} {
-		return NewClusterClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+		return NewClusterClient(c.sitepodRestClient, c.sitepodRestClientConfig, c.config.Namespace)
 	}).(*ClusterClient)
 }
 
 func (c *Client) AppComps() *AppCompClient {
 	return c.usingCache("appcomps", func() interface{} {
-		return NewAppCompClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+		return NewAppCompClient(c.sitepodRestClient, c.sitepodRestClientConfig, c.config.Namespace)
 	}).(*AppCompClient)
 }
 
 func (c *Client) PodTasks() *PodTaskClient {
 	return c.usingCache("podtasks", func() interface{} {
-		return NewPodTaskClient(c.sitepodRestClient, c.sitepodRestClientConfig, namespace)
+		return NewPodTaskClient(c.sitepodRestClient, c.sitepodRestClientConfig, c.config.Namespace)
 	}).(*PodTaskClient)
 }
 
 func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) (*restclient.RESTClient, *restclient.Config) {
 
 	rcConfig := &restclient.Config{
-		Host:    hostPath,
+		Host:    c.config.ApiServer,
 		APIPath: apiPath,
 		ContentConfig: restclient.ContentConfig{
 			GroupVersion:         gv,

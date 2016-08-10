@@ -1,5 +1,5 @@
 #!/bin/zsh
 
 cd cmd/sitepod-cm 
-exec ./sitepod-cm run 
+exec ./sitepod-cm run "$@"
 

@@ -19,10 +19,16 @@ import (
 )
 
 type SimpleSystem struct {
+	Config *SimpleConfig
 }
 
-func NewSimpleSystem() *SimpleSystem {
-	return &SimpleSystem{}
+type SimpleConfig struct {
+	ApiServer string
+	Namespace string
+}
+
+func NewSimpleSystem(config *SimpleConfig) *SimpleSystem {
+	return &SimpleSystem{config}
 }
 
 func BundleScheme() *runtime.Scheme {
@@ -38,7 +44,8 @@ func BundleScheme() *runtime.Scheme {
 
 func (s *SimpleSystem) Run(stopCh <-chan struct{}) {
 	glog.Info("Starting simple system")
-	cc := client.NewClient(BundleScheme())
+	cc := client.NewClient(BundleScheme(), &client.ClientConfig{s.Config.ApiServer,
+		s.Config.Namespace})
 
 	etcController := etc.NewEtcController(cc)
 	go etcController.Run(stopCh)

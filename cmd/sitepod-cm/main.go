@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"math/rand"
+	"os"
 	"runtime"
 	"time"
 
@@ -16,8 +17,6 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	// invert stupid glog default of logging to temp file instead
-	// pass --logtostderr=false to revert to old default
 	if logStdErr := flag.Lookup("logtostderr"); logStdErr != nil {
 		logStdErr.DefValue = "true"
 	}
@@ -26,5 +25,8 @@ func main() {
 
 	glog.Info("Starting sitepod controller manager")
 
-	cmd.Execute()
+	if err := cmd.RootCmd.Execute(); err != nil {
+		glog.Errorf("Command failed: %+v", err)
+		os.Exit(-1)
+	}
 }
