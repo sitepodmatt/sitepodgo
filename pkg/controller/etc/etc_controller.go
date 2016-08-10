@@ -131,7 +131,7 @@ func (c *EtcController) ProcessUpdate(key string) error {
 	config.Data["group"] = groupOutput
 
 	glog.Infof("Updating config map %s", config.GetName())
-	c.Client.ConfigMaps().Update(config)
+	c.Client.ConfigMaps().UpdateOrAdd(config)
 	glog.Infof("Updated config map %s", config.GetName())
 
 	return nil
