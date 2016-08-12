@@ -91,20 +91,19 @@ func (c *AppCompController) ProcessUpdateSSH(key string) error {
 	pvc := sitepod.Spec.VolumeClaims[0]
 	//pv := c.Client.PVs().GetByKey(pvc)
 
-	sshContainerObj, exists, _ := From(deployment.Spec.Template.Spec.Containers).Where(func(s T) (bool, error) {
-		return (s.(k8s_api.Container).Name == "sitepod-ssh"), nil
-	}).First()
-
-	// TODO surely we can simplify this
 	var sshContainer *k8s_api.Container
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		if container.Name == "sitepod-ssh" {
+			sshContainer = &container
+			break
+		}
+	}
+
 	isNew := false
-	if !exists {
+	if sshContainer == nil {
 		glog.Infof("Creating new sitepod-ssh container for deployment %s", deployment.GetName())
 		sshContainer = &k8s_api.Container{}
 		isNew = true
-	} else {
-		sshContainer = sshContainerObj.(*k8s_api.Container)
-		glog.Infof("Found existing sitepod-ssh container for deployment %s", deployment.GetName())
 	}
 
 	image := ac.Spec.Image

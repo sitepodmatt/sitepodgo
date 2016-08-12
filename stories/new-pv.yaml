@@ -2,10 +2,13 @@ kind: PersistentVolume
 apiVersion: v1
 metadata:
   name: acme-pv
+  annotations:
+    sitepod.io/pinned-host: ubuntumaster
 spec:
   capacity: 
     storage: 5Gi
   accessModes:
   - ReadWriteOnce
   hostPath:
-    path: /var/somewhere
+    path: /var/sitepod/pv1
+

@@ -73,7 +73,10 @@ func NewClientTmpl(rc *restclient.RESTClient, config *restclient.Config, ns stri
 	}
 
 	indexers["uid"] = func(obj interface{}) ([]string, error) {
-		accessor, _ := meta.Accessor(obj)
+		accessor, err := meta.Accessor(obj)
+		if err != nil {
+			panic(err)
+		}
 		return []string{string(accessor.GetUID())}, nil
 	}
 
@@ -119,6 +122,15 @@ func (c *ClientTmpl) KeyOf(obj interface{}) string {
 		panic(err)
 	}
 	return key
+}
+
+func (c *ClientTmpl) UIDOf(obj interface{}) (string, bool) {
+
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return "", false
+	}
+	return string(accessor.GetUID()), true
 }
 
 //TODO: wrong location? shared?

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-URL="http://localhost:8080"
+URL="http://localhost:9080"
 
 curlit() {
   curl "$@"
@@ -13,11 +13,12 @@ post() {
 echo "Creating sitepod"
 SITEPOD_OUTPUT=$(post <(yaml2json new-sitepod.yaml) "/apis/stable.sitepod.io/v1/namespaces/default/sitepods")
 echo $SITEPOD_OUTPUT
-exit
+
 
 
 SITEPOD_UID=$(echo -n "$SITEPOD_OUTPUT" | jq .metadata.uid)
 echo -e "$SITEPOD_UID"
+
 
 #echo "Creating systemuser-matt"
 #post <(yaml3json new-system-user.yaml) "/apis/stable.sitepod.io/v1/namespaces/default/systemusers"
@@ -32,7 +33,7 @@ jsontempfile=$(mktemp)
 { jq ".spec.sshHostKey = \"$(cat $tempfile)\" | .metadata.labels.sitepod = $SITEPOD_UID" new-ssh-service.json > "$jsontempfile" ; } && mv "$jsontempfile" new-ssh-service.json
 
 echo "Create user ssh service"
-post new-ssh-service.json "/apis/stable.sitepod.io/v1/namespaces/default/serviceinstances"
+post new-ssh-service.json "/apis/stable.sitepod.io/v1/namespaces/default/appcomponents"
 
 #cat new-ssh-service.json
 #exit

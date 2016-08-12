@@ -1,7 +1,7 @@
 metadata:
   generateName: "sitepod-ssh-"
   labels:
-    sitepod: c3d0af1c-5d38-11e6-8139-98eecb292b22
+    sitepod: baa60c3d-5fa0-11e6-8619-0800274a63e2
 apiVersion: stable.sitepod.io/v1
 kind: Appcomponent
 spec:

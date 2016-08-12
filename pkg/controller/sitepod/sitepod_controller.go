@@ -7,6 +7,7 @@ package sitepod
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	. "github.com/ahmetalpbalkan/go-linq"
@@ -91,7 +92,9 @@ func (sc *SitepodController) QueueUpdate(old interface{}, cur interface{}) {
 }
 
 func (sc *SitepodController) QueueDelete(deleted interface{}) {
-	sc.EnqueueDelete(sc.Client.Sitepods().KeyOf(deleted))
+	if uid, hasUid := sc.Client.Sitepods().UIDOf(deleted); hasUid {
+		sc.EnqueueDelete(uid)
+	}
 }
 
 func (sc *SitepodController) ProcessUpdate(key string) error {
@@ -136,7 +139,7 @@ func (sc *SitepodController) ProcessUpdate(key string) error {
 	var pinnedHost string
 	if isHostPath {
 		if pinnedHost = pv.Annotations["sitepod.io/pinned-host"]; len(pinnedHost) == 0 {
-			return DependentConfigNotValid{fmt.Sprintf("No pinned host specified for host local storage for pv %s", pv.GetName())}
+			return DependentConfigNotValid{fmt.Sprintf("No sitepod.io/pinned-host label specified for host local storage for pv %s", pv.GetName())}
 		}
 	}
 
@@ -168,17 +171,67 @@ func (sc *SitepodController) ProcessUpdate(key string) error {
 	if !smExists {
 		deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers,
 			k8s_api.Container{
-				Name:  "sitepod-manager",
-				Image: "gcr.io/google_containers/pause:2.0",
+				Name:    "sitepod-manager",
+				Image:   "alpine:3.1",
+				Command: []string{"/usr/bin/tail", "-f", "/dev/null"},
 			})
 	}
 
 	deployment.Spec.Template.GenerateName = "sitepod-pod-"
 	deployment.Spec.Template.Labels = labels
-	//TODO add labels don't replace
 	deployment.Labels = labels
-
 	deployment = c.Deployments().UpdateOrAdd(deployment)
+
+	if !sitepod.Status.StorageSetup {
+
+		glog.Infof("Provisioning storage for sitepod %s", sitepodKey)
+		pod, exists := c.Pods().MaybeSingleBySitepodKey(sitepodKey)
+		if !exists {
+			return ConditionsNotReady{"Still provisioning pod"}
+		}
+
+		readyExists, _ := From(pod.Status.Conditions).Where(func(s T) (bool, error) {
+			return s.(k8s_api.PodCondition).Type == k8s_api.PodReady &&
+				s.(k8s_api.PodCondition).Status == k8s_api.ConditionTrue, nil
+		}).Any()
+
+		if !readyExists {
+			return ConditionsNotReady{"Pod not in ready state"}
+		}
+
+		podTasks := c.PodTasks().ByIndexByKey("sitepod", sitepodKey)
+
+		//TODO figure out how to make this configurable
+		cmd := []string{"/bin/mkdir", "-p", "/home"}
+
+		podTaskExists := false
+		for _, podTask := range podTasks {
+			if reflect.DeepEqual(podTask.Spec.Command, cmd) && pod.Name == podTask.Spec.PodName {
+				podTaskExists = true
+				glog.Infof("Existing podtask for home dir creation for %s on %s found", key, sitepodKey)
+			}
+		}
+
+		if podTaskExists {
+			return ConditionsNotReady{"Pod task waiting completion"}
+		}
+
+		glog.Infof("Creating new pod task")
+		podTask := c.PodTasks().NewEmpty()
+		podTask.Labels = make(map[string]string)
+		podTask.Labels["sitepod"] = sitepodKey
+		podTask.Spec.Command = cmd
+		podTask.Spec.PodName = pod.GetName()
+		podTask.Spec.ContainerName = "sitepod-manager"
+		podTask.Spec.Namespace = pod.GetNamespace()
+		podTask.Spec.BehalfType = "Sitepod"
+		podTask.Spec.BehalfOf = sitepod.Name
+		podTask.Spec.BehalfCondition = "StorageReady"
+
+		c.PodTasks().Add(podTask)
+		glog.Infof("Created job to build storage for sitepod %s", sitepodKey)
+	}
+
 	return nil
 }
 

@@ -23,6 +23,7 @@ type SitepodSpec struct {
 type SitepodStatus struct {
 	Pods         []string `json:"pods,omitempty"`
 	LocalStorage []string `json:"localStorage,omitempty"`
+	StorageSetup bool     `json:"storageSetup,omitempty"`
 }
 
 func (s *Sitepod) GetObjectKind() unversioned.ObjectKind {
@@ -32,6 +33,11 @@ func (s *Sitepod) GetObjectKind() unversioned.ObjectKind {
 func (s *Sitepod) GetObjectMeta() meta.Object {
 	om := v1.ObjectMeta(s.ObjectMeta)
 	return &om
+}
+
+func (s *Sitepod) SetCondition(condition string, val bool) {
+	//TODO decide how to handle this
+	s.Status.StorageSetup = val
 }
 
 func (s *Sitepod) GetRootStorageName() (string, error) {

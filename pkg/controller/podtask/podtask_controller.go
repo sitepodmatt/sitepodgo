@@ -67,7 +67,8 @@ func (c *PodTaskController) ProcessUpdate(key string) error {
 
 	// TODO expect gc to clean these up eventually
 	if podTask.Status.Completed == true || podTask.Status.Attempts < podTask.Spec.MaxAttempts {
-		glog.Info("Skipping podtask %s", key)
+		glog.Infof("Skipping podtask %s - is completed or attempts max out", key)
+		return nil
 	}
 
 	stdOut, stdErr, err := c.Execute(podTask.Spec.PodName, podTask.Spec.ContainerName, podTask.Spec.Command)
@@ -93,7 +94,8 @@ func (c *PodTaskController) ProcessUpdate(key string) error {
 
 		if len(podTask.Spec.BehalfOf) > 0 {
 
-			behalfItem, err := c.Client.Sitepods().RestClient().Get().Resource(podTask.Spec.BehalfType).
+			//TODO figure out plural lookup
+			behalfItem, err := c.Client.Sitepods().RestClient().Get().Resource(podTask.Spec.BehalfType + "s").
 				Namespace(podTask.Namespace).Name(podTask.Spec.BehalfOf).Do().Get()
 
 			if err != nil || behalfItem == nil {
@@ -109,7 +111,7 @@ func (c *PodTaskController) ProcessUpdate(key string) error {
 					podTask.Namespace, podTask.Spec.BehalfOf)
 			}
 
-			err = c.Client.Sitepods().RestClient().Put().Resource(podTask.Spec.BehalfType).
+			err = c.Client.Sitepods().RestClient().Put().Resource(podTask.Spec.BehalfType + "s").
 				Namespace(podTask.Namespace).Name(podTask.Spec.BehalfOf).Body(behalfItem).Do().Error()
 
 			if err != nil {
