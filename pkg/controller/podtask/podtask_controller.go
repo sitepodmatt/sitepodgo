@@ -3,7 +3,7 @@ package podtask
 import (
 	"bytes"
 	"fmt"
-	//"time"
+	"time"
 
 	"k8s.io/kubernetes/pkg/client/unversioned/remotecommand"
 	remotecommandserver "k8s.io/kubernetes/pkg/kubelet/server/remotecommand"
@@ -66,8 +66,14 @@ func (c *PodTaskController) ProcessUpdate(key string) error {
 	}
 
 	// TODO expect gc to clean these up eventually
-	if podTask.Status.Completed == true || podTask.Status.Attempts < podTask.Spec.MaxAttempts {
+	if podTask.Status.Completed == true || podTask.Status.Attempts >= podTask.Spec.MaxAttempts {
 		glog.Infof("Skipping podtask %s - is completed or attempts max out", key)
+
+		if time.Now().Sub(podTask.CreationTimestamp.Time).Hours() > 24 {
+			glog.Infof("Deleting podtask %s", key)
+			c.Client.PodTasks().Delete(podTask)
+			glog.Infof("Deleted podtask %s", key)
+		}
 		return nil
 	}
 
