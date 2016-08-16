@@ -281,7 +281,32 @@ func (sc *SitepodController) ProcessDelete(key string) error {
 		}
 	}
 
+	dependencies := []struct {
+		Getter  func(string) []interface{}
+		Deleter func(interface{})
+	}{
+		{
+			Getter:  c.PodTasks().BySitepodKeyFunc(),
+			Deleter: c.PodTasks().DeleteFunc(),
+		},
+		{
+			Getter:  c.SystemUsers().BySitepodKeyFunc(),
+			Deleter: c.SystemUsers().DeleteFunc(),
+		},
+		{
+			Getter:  c.AppComps().BySitepodKeyFunc(),
+			Deleter: c.AppComps().DeleteFunc(),
+		},
+	}
+
+	for _, dep := range dependencies {
+		for _, v := range dep.Getter(key) {
+			dep.Deleter(v)
+		}
+	}
+
 	return nil
+
 }
 
 // kubectl currently does all the heavy work for deployment cascade deletion

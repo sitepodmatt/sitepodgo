@@ -189,6 +189,16 @@ func (c *AppCompClient) BySitepodKey(sitepodKey string) []*v1.Appcomponent {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *AppCompClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *AppCompClient) MaybeSingleByUID(uid string) (*v1.Appcomponent, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *AppCompClient) Delete(target *v1.Appcomponent) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *AppCompClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*v1.Appcomponent)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

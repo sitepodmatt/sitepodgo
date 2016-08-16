@@ -189,6 +189,16 @@ func (c *PVClaimClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVol
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *PVClaimClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *PVClaimClient) MaybeSingleByUID(uid string) (*k8s_api.PersistentVolumeClaim, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *PVClaimClient) Delete(target *k8s_api.PersistentVolumeClaim) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *PVClaimClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*k8s_api.PersistentVolumeClaim)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

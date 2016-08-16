@@ -189,6 +189,16 @@ func (c *SitepodClient) BySitepodKey(sitepodKey string) []*v1.Sitepod {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *SitepodClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *SitepodClient) MaybeSingleByUID(uid string) (*v1.Sitepod, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *SitepodClient) Delete(target *v1.Sitepod) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *SitepodClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*v1.Sitepod)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

@@ -63,6 +63,16 @@ func (c *AppCompController) ProcessUpdate(key string) error {
 	return c.ProcessUpdateSSH(key)
 }
 
+func (c *AppCompController) SpecBuilder(name string) *v1.AppComponentSpec {
+
+	spec := &v1.AppComponentSpec{}
+	if name == "ssh" {
+		spec.Type = "ssh"
+	}
+
+	return spec
+}
+
 func (c *AppCompController) ProcessUpdateSSH(key string) error {
 
 	ac, exists := c.Client.AppComps().MaybeGetByKey(key)

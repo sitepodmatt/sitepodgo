@@ -189,6 +189,16 @@ func (c *DeploymentClient) BySitepodKey(sitepodKey string) []*ext_api.Deployment
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *DeploymentClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *DeploymentClient) MaybeSingleByUID(uid string) (*ext_api.Deployment, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *DeploymentClient) Delete(target *ext_api.Deployment) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *DeploymentClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*ext_api.Deployment)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

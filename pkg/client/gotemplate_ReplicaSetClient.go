@@ -189,6 +189,16 @@ func (c *ReplicaSetClient) BySitepodKey(sitepodKey string) []*ext_api.ReplicaSet
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *ReplicaSetClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *ReplicaSetClient) MaybeSingleByUID(uid string) (*ext_api.ReplicaSet, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *ReplicaSetClient) Delete(target *ext_api.ReplicaSet) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *ReplicaSetClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*ext_api.ReplicaSet)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

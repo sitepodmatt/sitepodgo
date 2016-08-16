@@ -189,6 +189,16 @@ func (c *PodTaskClient) BySitepodKey(sitepodKey string) []*v1.Podtask {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *PodTaskClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *PodTaskClient) MaybeSingleByUID(uid string) (*v1.Podtask, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *PodTaskClient) Delete(target *v1.Podtask) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *PodTaskClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*v1.Podtask)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

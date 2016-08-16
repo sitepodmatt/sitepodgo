@@ -189,6 +189,16 @@ func (c *ConfigMapClient) BySitepodKey(sitepodKey string) []*k8s_api.ConfigMap {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *ConfigMapClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *ConfigMapClient) MaybeSingleByUID(uid string) (*k8s_api.ConfigMap, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *ConfigMapClient) Delete(target *k8s_api.ConfigMap) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *ConfigMapClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*k8s_api.ConfigMap)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

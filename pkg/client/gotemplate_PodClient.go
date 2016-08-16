@@ -189,6 +189,16 @@ func (c *PodClient) BySitepodKey(sitepodKey string) []*k8s_api.Pod {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *PodClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *PodClient) MaybeSingleByUID(uid string) (*k8s_api.Pod, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *PodClient) Delete(target *k8s_api.Pod) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *PodClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*k8s_api.Pod)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

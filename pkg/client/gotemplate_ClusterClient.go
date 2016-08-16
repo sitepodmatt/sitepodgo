@@ -189,6 +189,16 @@ func (c *ClusterClient) BySitepodKey(sitepodKey string) []*v1.Cluster {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *ClusterClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *ClusterClient) MaybeSingleByUID(uid string) (*v1.Cluster, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *ClusterClient) Delete(target *v1.Cluster) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *ClusterClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*v1.Cluster)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

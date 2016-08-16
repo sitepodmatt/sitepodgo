@@ -189,6 +189,16 @@ func (c *PVClient) BySitepodKey(sitepodKey string) []*k8s_api.PersistentVolume {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *PVClient) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *PVClient) MaybeSingleByUID(uid string) (*k8s_api.PersistentVolume, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -329,6 +339,19 @@ func (c *PVClient) Delete(target *k8s_api.PersistentVolume) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *PVClient) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*k8s_api.PersistentVolume)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

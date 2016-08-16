@@ -198,6 +198,16 @@ func (c *ClientTmpl) BySitepodKey(sitepodKey string) []*ResourceType {
 	return c.ByIndexByKey("sitepod", sitepodKey)
 }
 
+func (c *ClientTmpl) BySitepodKeyFunc() func(string) []interface{} {
+	return func(sitepodKey string) []interface{} {
+		iArray := []interface{}{}
+		for _, r := range c.ByIndexByKey("sitepod", sitepodKey) {
+			iArray = append(iArray, r)
+		}
+		return iArray
+	}
+}
+
 func (c *ClientTmpl) MaybeSingleByUID(uid string) (*ResourceType, bool) {
 	items := c.ByIndexByKey("uid", uid)
 	if len(items) == 0 {
@@ -338,6 +348,19 @@ func (c *ClientTmpl) Delete(target *ResourceType) {
 
 	if err != nil {
 		panic(err)
+	}
+}
+
+func (c *ClientTmpl) DeleteFunc() func(interface{}) {
+	return func(iTarget interface{}) {
+
+		target := iTarget.(*ResourceType)
+
+		err := c.TryDelete(target)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
