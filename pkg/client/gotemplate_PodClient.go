@@ -100,9 +100,19 @@ func (c *PodClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultablePodClient interface {
+	SetDefaults()
+}
+
 func (c *PodClient) NewEmpty() *k8s_api.Pod {
 	item := &k8s_api.Pod{}
 	item.GenerateName = "sitepod-pod-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultablePodClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

@@ -100,9 +100,19 @@ func (c *ConfigMapClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultableConfigMapClient interface {
+	SetDefaults()
+}
+
 func (c *ConfigMapClient) NewEmpty() *k8s_api.ConfigMap {
 	item := &k8s_api.ConfigMap{}
 	item.GenerateName = "sitepod-cm-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultableConfigMapClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

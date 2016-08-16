@@ -100,9 +100,19 @@ func (c *ClusterClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultableClusterClient interface {
+	SetDefaults()
+}
+
 func (c *ClusterClient) NewEmpty() *v1.Cluster {
 	item := &v1.Cluster{}
 	item.GenerateName = "sitepod-cluster-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultableClusterClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

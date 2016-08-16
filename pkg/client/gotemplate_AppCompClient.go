@@ -100,9 +100,19 @@ func (c *AppCompClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultableAppCompClient interface {
+	SetDefaults()
+}
+
 func (c *AppCompClient) NewEmpty() *v1.Appcomponent {
 	item := &v1.Appcomponent{}
 	item.GenerateName = "sitepod-appcomp-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultableAppCompClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

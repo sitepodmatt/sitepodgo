@@ -100,9 +100,19 @@ func (c *ReplicaSetClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultableReplicaSetClient interface {
+	SetDefaults()
+}
+
 func (c *ReplicaSetClient) NewEmpty() *ext_api.ReplicaSet {
 	item := &ext_api.ReplicaSet{}
 	item.GenerateName = "sitepod-rs-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultableReplicaSetClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

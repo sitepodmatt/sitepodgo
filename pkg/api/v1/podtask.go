@@ -13,12 +13,22 @@ type Podtask struct {
 	Status               PodTaskStatus `json:"status"`
 }
 
+const (
+	DefaultMaxAttempts = 5
+)
+
+func (p *Podtask) SetDefaults() {
+	p.ObjectMeta.Labels = make(map[string]string)
+	p.ObjectMeta.Annotations = make(map[string]string)
+	p.Spec.MaxAttempts = DefaultMaxAttempts
+}
+
 type PodTaskSpec struct {
 	Namespace       string   `json:"namespace"`
 	PodName         string   `json:"podName"`
-	ContainerName   string   `json:"containerName",omitempty`
+	ContainerName   string   `json:"containerName"`
 	Command         []string `json:"command"`
-	MaxAttempts     int      `json:"mergeErrAndOut,omitempty"`
+	MaxAttempts     int      `json:"maxAttempts"`
 	BehalfType      string   `json:"behalfType,omitempty"`
 	BehalfOf        string   `json:"behalfOf,omitempty"`
 	BehalfCondition string   `json:"behalfCondition,omitempty"`
@@ -26,7 +36,7 @@ type PodTaskSpec struct {
 
 type PodTaskStatus struct {
 	Completed bool   `json:"completed"`
-	Attempts  int    `json:"attempt"`
+	Attempts  int    `json:"attempts"`
 	ExitCode  int    `json:"exitCode"`
 	StdErr    string `json:"stdErr"`
 	StdOut    string `json:"stdOut"`

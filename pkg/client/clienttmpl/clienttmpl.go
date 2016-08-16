@@ -109,9 +109,19 @@ func (c *ClientTmpl) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultable interface {
+	SetDefaults()
+}
+
 func (c *ClientTmpl) NewEmpty() *ResourceType {
 	item := &ResourceType{}
 	item.GenerateName = DefaultGenName
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultable); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

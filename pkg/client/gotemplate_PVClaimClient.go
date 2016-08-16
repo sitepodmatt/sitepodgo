@@ -100,9 +100,19 @@ func (c *PVClaimClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultablePVClaimClient interface {
+	SetDefaults()
+}
+
 func (c *PVClaimClient) NewEmpty() *k8s_api.PersistentVolumeClaim {
 	item := &k8s_api.PersistentVolumeClaim{}
 	item.GenerateName = "sitepod-pvc-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultablePVClaimClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

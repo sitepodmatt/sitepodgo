@@ -100,9 +100,19 @@ func (c *SitepodClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultableSitepodClient interface {
+	SetDefaults()
+}
+
 func (c *SitepodClient) NewEmpty() *v1.Sitepod {
 	item := &v1.Sitepod{}
 	item.GenerateName = "sitepod-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultableSitepodClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

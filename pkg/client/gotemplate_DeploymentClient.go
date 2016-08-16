@@ -100,9 +100,19 @@ func (c *DeploymentClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultableDeploymentClient interface {
+	SetDefaults()
+}
+
 func (c *DeploymentClient) NewEmpty() *ext_api.Deployment {
 	item := &ext_api.Deployment{}
 	item.GenerateName = "sitepod-deployment-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultableDeploymentClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

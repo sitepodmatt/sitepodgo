@@ -100,9 +100,19 @@ func (c *SystemUserClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultableSystemUserClient interface {
+	SetDefaults()
+}
+
 func (c *SystemUserClient) NewEmpty() *v1.SystemUser {
 	item := &v1.SystemUser{}
 	item.GenerateName = "systemuser-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultableSystemUserClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

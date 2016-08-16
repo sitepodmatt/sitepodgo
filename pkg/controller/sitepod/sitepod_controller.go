@@ -168,13 +168,43 @@ func (sc *SitepodController) ProcessUpdate(key string) error {
 		return (s.(k8s_api.Container).Name == "sitepod-manager"), nil
 	}).Any()
 
+	pvc := sitepod.Spec.VolumeClaims[0]
+
 	if !smExists {
+		vms := []k8s_api.VolumeMount{k8s_api.VolumeMount{
+			MountPath: "/home",
+			SubPath:   "home",
+			Name:      "home-storage",
+		}}
+
 		deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers,
 			k8s_api.Container{
-				Name:    "sitepod-manager",
-				Image:   "alpine:3.1",
-				Command: []string{"/usr/bin/tail", "-f", "/dev/null"},
+				VolumeMounts: vms,
+				Name:         "sitepod-manager",
+				Image:        "alpine:3.1",
+				Command:      []string{"/usr/bin/tail", "-f", "/dev/null"},
 			})
+
+		homeStorageVolumeInPod := false
+		for _, sv := range deployment.Spec.Template.Spec.Volumes {
+			if sv.Name == "home-storage" {
+				homeStorageVolumeInPod = true
+				break
+			}
+		}
+
+		// Find related PV for PVCLAIM
+		if !homeStorageVolumeInPod {
+			deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes,
+				k8s_api.Volume{
+					Name: "home-storage",
+					VolumeSource: k8s_api.VolumeSource{
+						PersistentVolumeClaim: &k8s_api.PersistentVolumeClaimVolumeSource{
+							ClaimName: pvc,
+						},
+					},
+				})
+		}
 	}
 
 	deployment.Spec.Template.GenerateName = "sitepod-pod-"

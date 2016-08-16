@@ -100,9 +100,19 @@ func (c *PodTaskClient) HasSynced() bool {
 	return c.informer.HasSynced()
 }
 
+type ItemDefaultablePodTaskClient interface {
+	SetDefaults()
+}
+
 func (c *PodTaskClient) NewEmpty() *v1.Podtask {
 	item := &v1.Podtask{}
 	item.GenerateName = "sitepod-podtask-"
+	var aitem interface{}
+	aitem = item
+	if ditem, ok := aitem.(ItemDefaultablePodTaskClient); ok {
+		ditem.SetDefaults()
+	}
+
 	return item
 }
 

@@ -20,7 +20,6 @@ func NewSystemUserController(client *cc.Client) framework.ControllerInterface {
 	sc := &SystemUserController{*NewSimpleController("SystemUserController", client, []Syncer{client.PVClaims(),
 		client.PVs(), client.Sitepods(), client.SystemUsers()}, nil, nil)}
 	sc.SyncFunc = sc.ProcessUpdate
-	//sc.DeleteFunc = sc.ProcessDelete
 	client.SystemUsers().AddInformerHandlers(framework.ResourceEventHandlerFuncs{
 		AddFunc:    sc.QueueAdd,
 		UpdateFunc: sc.QueueUpdate,
