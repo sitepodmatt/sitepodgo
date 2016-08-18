@@ -3,9 +3,7 @@ package services
 // Listen for new app components and build deployments when the sitepod is ready with a root deployment and PV
 
 import (
-	"bytes"
 	"fmt"
-	"text/template"
 
 	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
@@ -123,8 +121,9 @@ func (c *AppCompController) ProcessUpdate(key string) error {
 
 		var matchedConfigMap *k8s_api.ConfigMap
 		for _, configMap := range configMapList {
-			if configMap.Labels["config-directory"] == directory &&
-				configMap.Labels["appcomponent"] == ac.Name {
+			if configMap.Annotations["sitepod.io/mount-path"] == directory &&
+				configMap.Labels["appcomponent"] == ac.Name &&
+				configMap.Labels["configtype"] == "appcomponent" {
 				matchedConfigMap = configMap
 				break
 			}
@@ -134,31 +133,60 @@ func (c *AppCompController) ProcessUpdate(key string) error {
 			matchedConfigMap = c.Client.ConfigMaps().NewEmpty()
 			matchedConfigMap.Labels = make(map[string]string)
 			matchedConfigMap.Data = make(map[string]string)
+			matchedConfigMap.Annotations = make(map[string]string)
 			matchedConfigMap.Labels["sitepod"] = sitepodKey
-			matchedConfigMap.Labels["config-directory"] = directory
+			matchedConfigMap.Annotations["sitepod.io/mount-path"] = directory
 			matchedConfigMap.Labels["appcomponent"] = ac.Name
+			matchedConfigMap.Labels["configtype"] = "appcomponent"
 			configMapList = append(configMapList, matchedConfigMap)
 		}
 
 		//TODO await PR from rata regarding uid/gid application to configmaps
 
+		keyMap := make(map[string]string)
 		for _, acConfigFile := range acConfigFiles {
 			matchedConfigMap.Data[acConfigFile.Name] = acConfigFile.Content
+			if acConfigFile.Name != acConfigFile.Filename {
+				keyMap[acConfigFile.Name] = acConfigFile.Filename
+			}
 		}
 
-		c.Client.ConfigMaps().UpdateOrAdd(matchedConfigMap)
-		c.attachConfigMap(deployment, destContainer, matchedConfigMap)
+		matchedConfigMap = c.Client.ConfigMaps().UpdateOrAdd(matchedConfigMap)
+		c.attachConfigMap(deployment, destContainer, matchedConfigMap, keyMap)
 	}
 
-	globalConfigMapList := c.Client.ConfigMaps().List()
-	for _, configMap := range globalConfigMapList {
+	if ac.Spec.MountEtcs {
 
-		if configMap.Labels["config-type"] != "etc" {
-			continue
+		globalConfigMapList := c.Client.ConfigMaps().List()
+		for _, configMap := range globalConfigMapList {
+
+			if configMap.Labels["config-type"] != "etc" {
+				continue
+			}
+
+			c.attachConfigMap(deployment, destContainer, configMap, nil)
+
+		}
+	}
+
+	if ac.Spec.MountHome {
+
+		homeVmExists := false
+		for _, vm := range destContainer.VolumeMounts {
+			if vm.Name == "home-storage" {
+				homeVmExists = true
+				break
+			}
 		}
 
-		c.attachConfigMap(deployment, destContainer, configMap)
-
+		if !homeVmExists {
+			destContainer.VolumeMounts = append(destContainer.VolumeMounts,
+				k8s_api.VolumeMount{
+					Name:      "home-storage",
+					MountPath: "/home",
+					SubPath:   "home",
+				})
+		}
 	}
 
 	if destIdx == -1 {
@@ -173,20 +201,7 @@ func (c *AppCompController) ProcessUpdate(key string) error {
 	return nil
 }
 
-func (c *AppCompController) generateSshdConfig(service *v1.Appcomponent) string {
-	template, err := template.ParseFiles("../../templates/sshd_config")
-	if err != nil {
-		panic(err)
-	}
-	buffer := bytes.NewBuffer([]byte{})
-	err = template.Execute(buffer, struct{}{})
-	if err != nil {
-		panic(err)
-	}
-	return buffer.String()
-}
-
-func (c *AppCompController) attachConfigMap(deployment *k8s_ext.Deployment, container *k8s_api.Container, cm *k8s_api.ConfigMap) {
+func (c *AppCompController) attachConfigMap(deployment *k8s_ext.Deployment, container *k8s_api.Container, cm *k8s_api.ConfigMap, km map[string]string) {
 
 	vmExists := false
 	for _, vm := range container.VolumeMounts {
@@ -215,6 +230,14 @@ func (c *AppCompController) attachConfigMap(deployment *k8s_ext.Deployment, cont
 	if !dvExists {
 
 		keyToPaths := []k8s_api.KeyToPath{}
+		if km != nil {
+			for k, v := range km {
+				if len(k) > 0 && len(v) > 0 {
+					keyToPaths = append(keyToPaths, k8s_api.KeyToPath{k, v})
+				}
+			}
+		}
+
 		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, k8s_api.Volume{
 			Name: cm.Name,
 			VolumeSource: k8s_api.VolumeSource{

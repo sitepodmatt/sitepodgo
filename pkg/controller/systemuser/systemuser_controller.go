@@ -63,7 +63,7 @@ func (c *SystemUserController) ProcessUpdate(key string) error {
 
 	if user.Status.AssignedFileUID == 0 {
 
-		cluster, exists := c.Client.Clusters().MaybeGetByKey("sitepod-single-teneant")
+		cluster, exists := c.Client.Clusters().MaybeGetByKey("sitepod-alpha")
 
 		if !exists {
 			//TODO pass name

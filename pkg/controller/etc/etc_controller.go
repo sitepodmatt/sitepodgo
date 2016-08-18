@@ -125,6 +125,10 @@ func (c *EtcController) ProcessUpdate(key string) error {
 		config.Data = make(map[string]string)
 	}
 
+	if config.Annotations == nil {
+		config.Annotations = make(map[string]string)
+	}
+	config.Annotations["sitepod.io/mount-path"] = "/etc/sitepod/etc"
 	config.Labels["config-type"] = "etc"
 	config.Data["passwd"] = passwdOutput
 	config.Data["shadow"] = shadowOutput

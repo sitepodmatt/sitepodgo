@@ -13,6 +13,12 @@ type Cluster struct {
 	Status               ClusterStatus `json:"status"`
 }
 
+func (c *Cluster) SetDefaults() {
+	c.ObjectMeta.Labels = make(map[string]string)
+	c.ObjectMeta.Annotations = make(map[string]string)
+	c.Spec.FileUIDCount = 2001
+}
+
 type ClusterSpec struct {
 	DisplayName  string `json:"displayName,omitempty"`
 	Description  string `json:"description,omitempty"`

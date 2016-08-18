@@ -1,6 +1,7 @@
 package specgen
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"sitepod.io/sitepod/pkg/api/v1"
+	"text/template"
 )
 
 func SpecGenSSHServer(obj interface{}) error {
@@ -29,6 +31,7 @@ func SpecGenSSHServer(obj interface{}) error {
 	privateKeyPemFile := v1.AppComponentConfigFile{
 		Name:      "sshprivate",
 		Content:   privateKey,
+		Filename:  "ssh_host_rsa_key",
 		Directory: "/etc/sitepod/ssh",
 		FileMode:  "0600",
 		Uid:       0,
@@ -38,12 +41,28 @@ func SpecGenSSHServer(obj interface{}) error {
 	publicKeySSHFile := v1.AppComponentConfigFile{
 		Name:      "sshpublic",
 		Content:   publicKey,
+		Filename:  "ssh_host_rsa_key.pub",
 		Directory: "/etc/sitepod/ssh",
 		FileMode:  "0600",
 		Uid:       0,
 		Gid:       0,
 	}
-	ac.Spec.ConfigFiles = append(ac.Spec.ConfigFiles, privateKeyPemFile, publicKeySSHFile)
+
+	sshdConfigContent := generateSSHDConfig()
+	sshdConfigFile := v1.AppComponentConfigFile{
+		Name:      "sshdconfig",
+		Content:   sshdConfigContent,
+		Filename:  "sshd_config",
+		Directory: "/etc/sitepod/ssh",
+		FileMode:  "0600",
+		Uid:       0,
+		Gid:       0,
+	}
+
+	ac.Spec.ConfigFiles = append(ac.Spec.ConfigFiles,
+		privateKeyPemFile,
+		publicKeySSHFile,
+		sshdConfigFile)
 	return nil
 }
 
@@ -77,19 +96,16 @@ func genNewKeys() (privateKeyPem string, sshPublicKey string) {
 	return
 }
 
-//type registry struct {
-//m map[string]func(interface{}) error
-//}
-
-//func Initialize(key string, obj interface{}) error {
-
-//if initializer, ok := m[key]; ok {
-//return intializer(obj)
-//} else {
-//return errors.New("No specgen for " + key)
-//}
-//}
-
-//func init() {
-//registry = make(map[string]func(interface{}) error)
-//}
+func generateSSHDConfig() string {
+	//TODO figure out where to store templates
+	template, err := template.ParseFiles("../../templates/sshd_config")
+	if err != nil {
+		panic(err)
+	}
+	buffer := bytes.NewBuffer([]byte{})
+	err = template.Execute(buffer, struct{}{})
+	if err != nil {
+		panic(err)
+	}
+	return buffer.String()
+}
