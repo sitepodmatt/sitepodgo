@@ -17,25 +17,24 @@ type Appcomponent struct {
 }
 
 type AppComponentConfigFile struct {
-	Path     string `json:"path,omitempty"`
-	Template string `json:"content,omitempty"`
-	FileMode string `json:"fileMode,omitempty"`
-	Uid      int    `json:"uid,omitempty"`
-	Gid      int    `json:"gid,omitempty"`
+	Name      string `json:"name"`
+	Directory string `json:"directory,omitempty"`
+	Filename  string `json:"filename,omitempty"`
+	Content   string `json:"content,omitempty"`
+	FileMode  string `json:"fileMode,omitempty"`
+	Uid       int    `json:"uid,omitempty"`
+	Gid       int    `json:"gid,omitempty"`
 }
 
 type AppComponentSpec struct {
-	Type           string                   `json:"type,omitempty"`
-	DisplayName    string                   `json:"displayName,omitempty"`
-	Image          string                   `json:"image,omitempty"`
-	ImageVersion   string                   `json:"imageVersion,omitempty"`
-	Description    string                   `json:"description,omitempty"`
-	DataVolumeName string                   `json:"dataVolumeName,omitempty"`
-	EtcMergeMode   string                   `json:"etcMergeMode,omitempty"`
-	ConfigFiles    []AppComponentConfigFile `json:"configFiles,omitempty"`
-	//TODO move these out
-	PrivateKeyPEM string `json:"privateKeyPEM,omitempty"`
-	PublicKeyPEM  string `json:"publicKeyPEM,omitempty"`
+	Type         string                   `json:"type,omitempty"`
+	DisplayName  string                   `json:"displayName,omitempty"`
+	Description  string                   `json:"description,omitempty"`
+	Image        string                   `json:"image,omitempty"`
+	ImageVersion string                   `json:"imageVersion,omitempty"`
+	MountHome    bool                     `json:"mountHome,omitempty"`
+	MountEtcs    bool                     `json:"mountEtcs,omitempty"`
+	ConfigFiles  []AppComponentConfigFile `json:"configFiles,omitempty"`
 }
 
 type AppComponentStatus struct {

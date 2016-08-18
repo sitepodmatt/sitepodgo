@@ -1,9 +1,9 @@
+kind: Appcomponent
+apiVersion: stable.sitepod.io/v1
 metadata:
-  generateName: "sitepod-ssh-"
+  generateName: sitepod-ssh-
   labels:
     sitepod: baa60c3d-5fa0-11e6-8619-0800274a63e2
-apiVersion: stable.sitepod.io/v1
-kind: Appcomponent
-spec:
- displayName: "SSH Instance"
+  annotations:
+    sitepod.io/specgen-onetime: ssh-server
 

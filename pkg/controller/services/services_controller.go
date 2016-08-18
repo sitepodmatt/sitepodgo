@@ -1,30 +1,29 @@
 package services
 
-// Listen for services and build deployments when the sitepod is ready with a PV
+// Listen for new app components and build deployments when the sitepod is ready with a root deployment and PV
+
 import (
 	"bytes"
 	"fmt"
 	"text/template"
 
-	. "github.com/ahmetalpbalkan/go-linq"
 	"github.com/golang/glog"
 	k8s_api "k8s.io/kubernetes/pkg/api"
+	k8s_ext "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/controller/framework"
 	"sitepod.io/sitepod/pkg/api/v1"
 	cc "sitepod.io/sitepod/pkg/client"
 	. "sitepod.io/sitepod/pkg/controller/shared"
-
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/base64"
-	"encoding/pem"
-	"golang.org/x/crypto/ssh"
+	"sitepod.io/sitepod/pkg/specgen"
 )
 
 type AppCompController struct {
 	SimpleController
 }
+
+const (
+	SpecGenAnnontationKey = "sitepod.io/specgen-onetime"
+)
 
 func NewAppCompController(client *cc.Client) framework.ControllerInterface {
 
@@ -57,24 +56,7 @@ func (c *AppCompController) QueueDelete(deleted interface{}) {
 
 func (c *AppCompController) ProcessUpdate(key string) error {
 
-	//TODO how we going to handle different app components
-	//for now just ssh
-
-	return c.ProcessUpdateSSH(key)
-}
-
-func (c *AppCompController) SpecBuilder(name string) *v1.AppComponentSpec {
-
-	spec := &v1.AppComponentSpec{}
-	if name == "ssh" {
-		spec.Type = "ssh"
-	}
-
-	return spec
-}
-
-func (c *AppCompController) ProcessUpdateSSH(key string) error {
-
+	glog.Infof("Processing appcomponent %s", key)
 	ac, exists := c.Client.AppComps().MaybeGetByKey(key)
 
 	if !exists {
@@ -83,7 +65,7 @@ func (c *AppCompController) ProcessUpdateSSH(key string) error {
 	}
 
 	sitepodKey := ac.Labels["sitepod"]
-	sitepod, exists := c.Client.Sitepods().MaybeSingleByUID(sitepodKey)
+	_, exists = c.Client.Sitepods().MaybeSingleByUID(sitepodKey)
 
 	if !exists {
 		glog.Infof("Sitepod %s no longer exists, skipping app comp %s", sitepodKey, ac.Name)
@@ -94,229 +76,100 @@ func (c *AppCompController) ProcessUpdateSSH(key string) error {
 
 	if !exists {
 		glog.Errorf("No root deployment exists (yet) for sitepod %s: %s", sitepodKey)
+		return DependentResourcesNotReady{fmt.Sprintf("Root deployment for sitepod %s does not yet exist.", sitepodKey)}
+	}
+
+	specGenKey := ac.Annotations[SpecGenAnnontationKey]
+	if specGenKey == "ssh-server" {
+		glog.Infof("Applying spec generation of %s to app comp %s,", specGenKey, ac.Name)
+		specgen.SpecGenSSHServer(ac)
+		delete(ac.Annotations, SpecGenAnnontationKey)
+		// This will requeue the processing with a spec generated in place
+		c.Client.AppComps().Update(ac)
+		glog.Infof("Updated app comp %s with spec gen", ac.Name)
 		return nil
 	}
 
-	//TODO check status of sitepod to ensure provisioned and ready conditions = true!
-	pvc := sitepod.Spec.VolumeClaims[0]
-	//pv := c.Client.PVs().GetByKey(pvc)
+	var destContainer *k8s_api.Container
+	destIdx := -1
 
-	var sshContainer *k8s_api.Container
-	for _, container := range deployment.Spec.Template.Spec.Containers {
-		if container.Name == "sitepod-ssh" {
-			sshContainer = &container
+	for idx, container := range deployment.Spec.Template.Spec.Containers {
+		if container.Name == ac.Name {
+			glog.Infof("Using existing container for app component %s deployment %s", ac.Name, deployment.GetName())
+			destContainer = &container
+			destIdx = idx
 			break
 		}
 	}
 
-	isNew := false
-	if sshContainer == nil {
-		glog.Infof("Creating new sitepod-ssh container for deployment %s", deployment.GetName())
-		sshContainer = &k8s_api.Container{}
-		isNew = true
+	if destContainer == nil {
+		glog.Infof("Creating new container for app component %s deployment %s", ac.Name, deployment.GetName())
+		destContainer = &k8s_api.Container{}
+		destContainer.Name = ac.Name
 	}
 
-	image := ac.Spec.Image
-	version := ac.Spec.ImageVersion
-	if image == "" {
-		image = "sitepod/sshdftp"
-	}
-	if version == "" {
-		version = "latest"
+	destContainer.Image = fmt.Sprintf("%s:%s", ac.Spec.Image, ac.Spec.ImageVersion)
+	destContainer.ImagePullPolicy = k8s_api.PullAlways
+
+	groupedConfigFiles := make(map[string][]v1.AppComponentConfigFile)
+
+	for _, acConfigFile := range ac.Spec.ConfigFiles {
+		groupedConfigFiles[acConfigFile.Directory] = append(groupedConfigFiles[acConfigFile.Directory], acConfigFile)
 	}
 
-	sshContainer.Image = image + ":" + version
-	sshContainer.ImagePullPolicy = k8s_api.PullAlways
-	sshContainer.Name = "sitepod-ssh"
+	configMapList := c.Client.ConfigMaps().BySitepodKey(sitepodKey)
 
-	if ac.Spec.PrivateKeyPEM == "" {
-		privateKey, err := rsa.GenerateKey(rand.Reader, 2014)
-		if err != nil {
-			panic(err)
+	for directory, acConfigFiles := range groupedConfigFiles {
+
+		var matchedConfigMap *k8s_api.ConfigMap
+		for _, configMap := range configMapList {
+			if configMap.Labels["config-directory"] == directory &&
+				configMap.Labels["appcomponent"] == ac.Name {
+				matchedConfigMap = configMap
+				break
+			}
 		}
 
-		privateKeyDer := x509.MarshalPKCS1PrivateKey(privateKey)
-		privateKeyBlock := pem.Block{
-			Type:    "RSA PRIVATE KEY",
-			Headers: nil,
-			Bytes:   privateKeyDer,
+		if matchedConfigMap == nil {
+			matchedConfigMap = c.Client.ConfigMaps().NewEmpty()
+			matchedConfigMap.Labels = make(map[string]string)
+			matchedConfigMap.Data = make(map[string]string)
+			matchedConfigMap.Labels["sitepod"] = sitepodKey
+			matchedConfigMap.Labels["config-directory"] = directory
+			matchedConfigMap.Labels["appcomponent"] = ac.Name
+			configMapList = append(configMapList, matchedConfigMap)
 		}
 
-		privateKeyPem := string(pem.EncodeToMemory(&privateKeyBlock))
+		//TODO await PR from rata regarding uid/gid application to configmaps
 
-		publicKey := privateKey.PublicKey
-
-		pub, err := ssh.NewPublicKey(&publicKey)
-
-		if err != nil {
-			panic(err)
+		for _, acConfigFile := range acConfigFiles {
+			matchedConfigMap.Data[acConfigFile.Name] = acConfigFile.Content
 		}
 
-		pkBytes := pub.Marshal()
-
-		ac.Spec.PrivateKeyPEM = privateKeyPem
-		ac.Spec.PublicKeyPEM = fmt.Sprintf("ssh-rsa %s %s", base64.StdEncoding.EncodeToString(pkBytes), "placeholder@sitepod.io")
+		c.Client.ConfigMaps().UpdateOrAdd(matchedConfigMap)
+		c.attachConfigMap(deployment, destContainer, matchedConfigMap)
 	}
 
-	//rootStorage := c.Client.PVClaims().SingleBySitepodKey(sitepodKey)
-
-	//FIX this
-	homeMounted := false
-	for _, vm := range sshContainer.VolumeMounts {
-		if vm.Name == "home-storage" {
-			homeMounted = true
-			break
-		}
-	}
-
-	if !homeMounted {
-		sshContainer.VolumeMounts = append(sshContainer.VolumeMounts, k8s_api.VolumeMount{
-			MountPath: "/home",
-			SubPath:   "home",
-			Name:      "home-storage",
-		})
-	}
-
-	//TODO use label selector
-	configMapList := c.Client.ConfigMaps().List()
-
-	for _, configMap := range configMapList {
+	globalConfigMapList := c.Client.ConfigMaps().List()
+	for _, configMap := range globalConfigMapList {
 
 		if configMap.Labels["config-type"] != "etc" {
 			continue
 		}
 
-		skipMount := false
-		for _, vm := range sshContainer.VolumeMounts {
-			if vm.Name == configMap.Name {
-				skipMount = true
-				break
-			}
-		}
+		c.attachConfigMap(deployment, destContainer, configMap)
 
-		if skipMount {
-			continue
-		}
-
-		glog.Infof("VMS: %d", len(sshContainer.VolumeMounts))
-		glog.Infof("VMS1: %+v", sshContainer.VolumeMounts[0])
-		glog.Infof("Config map %s not found so adding", configMap.Name)
-
-		vmExists, _ := From(sshContainer.VolumeMounts).Where(func(s T) (bool, error) {
-			return (s.(k8s_api.VolumeMount).Name == configMap.Name), nil
-		}).Any()
-
-		if !vmExists {
-			sshContainer.VolumeMounts = append(sshContainer.VolumeMounts,
-				k8s_api.VolumeMount{
-					Name:      configMap.Name,
-					MountPath: "/etc/sitepod/etc",
-				})
-		}
-
-		dvExists, _ := From(deployment.Spec.Template.Spec.Volumes).Where(func(s T) (bool, error) {
-			return (s.(k8s_api.Volume).Name == configMap.Name), nil
-		}).Any()
-
-		if !dvExists {
-			deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, k8s_api.Volume{
-				Name: configMap.Name,
-				VolumeSource: k8s_api.VolumeSource{
-					ConfigMap: &k8s_api.ConfigMapVolumeSource{
-						LocalObjectReference: k8s_api.LocalObjectReference{configMap.Name}}}})
-
-		}
 	}
 
-	glog.Infof("Getting config maps with sitepod key %s", sitepodKey)
-	configMaps := c.Client.ConfigMaps().BySitepodKey(sitepodKey)
-	glog.Infof("Got %d config maps for sitepod key %s", len(configMaps), sitepodKey)
-
-	sshConfigMapName := sitepod.Name + "-" + "sshconfigmap"
-	var sshConfigMap *k8s_api.ConfigMap
-	for _, configMap := range configMaps {
-		if configMap.GetName() == sshConfigMapName {
-			sshConfigMap = configMap
-			break
-		}
+	if destIdx == -1 {
+		deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers,
+			*destContainer)
+	} else {
+		deployment.Spec.Template.Spec.Containers[destIdx] = *destContainer
 	}
 
-	if sshConfigMap == nil {
-		sshConfigMap = &k8s_api.ConfigMap{}
-		sshConfigMap.Name = sshConfigMapName
-		sshConfigMap.Labels = make(map[string]string)
-		sshConfigMap.Labels["sitepod"] = sitepodKey
-	}
-
-	if sshConfigMap.Data == nil {
-		sshConfigMap.Data = make(map[string]string)
-	}
-
-	sshConfigMap.Data["sshdconfig"] = c.generateSshdConfig(ac)
-	sshConfigMap.Data["sshhostrsakey"] = ac.Spec.PrivateKeyPEM
-	sshConfigMap.Data["sshhostrsakeypub"] = ac.Spec.PublicKeyPEM
-
-	glog.Info("X")
-	c.Client.ConfigMaps().UpdateOrAdd(sshConfigMap)
-	glog.Info("X2")
-
-	sshContainer.VolumeMounts = append(sshContainer.VolumeMounts,
-		k8s_api.VolumeMount{
-			Name:      "ssh-configmap-volume",
-			MountPath: "/etc/sitepod/ssh",
-		})
-
-	configMapVolumeInPod := false
-	for _, sv := range deployment.Spec.Template.Spec.Volumes {
-		if sv.Name == "ssh-configmap-volume" {
-			configMapVolumeInPod = true
-			break
-		}
-	}
-
-	if !configMapVolumeInPod {
-		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes,
-			k8s_api.Volume{
-				Name: "ssh-configmap-volume",
-				VolumeSource: k8s_api.VolumeSource{
-					ConfigMap: &k8s_api.ConfigMapVolumeSource{
-						k8s_api.LocalObjectReference{sshConfigMapName},
-						[]k8s_api.KeyToPath{
-							k8s_api.KeyToPath{"sshdconfig", "sshd_config"},
-							k8s_api.KeyToPath{"sshhostrsakey", "ssh_host_rsa_key"},
-							k8s_api.KeyToPath{"sshhostrsakeypub", "ssh_host_rsa_key.pub"},
-						}},
-				},
-			})
-	}
-
-	homeStorageVolumeInPod := false
-	for _, sv := range deployment.Spec.Template.Spec.Volumes {
-		if sv.Name == "home-storage" {
-			homeStorageVolumeInPod = true
-			break
-		}
-	}
-
-	// Find related PV for PVCLAIM
-	if !homeStorageVolumeInPod {
-		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes,
-			k8s_api.Volume{
-				Name: "home-storage",
-				VolumeSource: k8s_api.VolumeSource{
-					PersistentVolumeClaim: &k8s_api.PersistentVolumeClaimVolumeSource{
-						ClaimName: pvc,
-					},
-				},
-			})
-	}
-
-	if isNew {
-		deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers, *sshContainer)
-	}
-
-	//TODONOW: FIX
 	c.Client.Deployments().Update(deployment)
+
 	return nil
 }
 
@@ -331,4 +184,44 @@ func (c *AppCompController) generateSshdConfig(service *v1.Appcomponent) string 
 		panic(err)
 	}
 	return buffer.String()
+}
+
+func (c *AppCompController) attachConfigMap(deployment *k8s_ext.Deployment, container *k8s_api.Container, cm *k8s_api.ConfigMap) {
+
+	vmExists := false
+	for _, vm := range container.VolumeMounts {
+		if vm.Name == cm.Name {
+			vmExists = true
+			break
+		}
+	}
+
+	if !vmExists {
+		container.VolumeMounts = append(container.VolumeMounts,
+			k8s_api.VolumeMount{
+				Name:      cm.Name,
+				MountPath: cm.Annotations["sitepod.io/mount-path"],
+			})
+	}
+
+	dvExists := false
+	for _, dv := range deployment.Spec.Template.Spec.Volumes {
+		if dv.Name == cm.Name {
+			dvExists = true
+			break
+		}
+	}
+
+	if !dvExists {
+
+		keyToPaths := []k8s_api.KeyToPath{}
+		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, k8s_api.Volume{
+			Name: cm.Name,
+			VolumeSource: k8s_api.VolumeSource{
+				ConfigMap: &k8s_api.ConfigMapVolumeSource{
+					k8s_api.LocalObjectReference{cm.Name},
+					keyToPaths,
+				}}})
+	}
+
 }
