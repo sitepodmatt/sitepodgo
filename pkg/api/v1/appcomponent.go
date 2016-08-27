@@ -32,6 +32,7 @@ type AppComponentSpec struct {
 	Description  string                   `json:"description,omitempty"`
 	Image        string                   `json:"image,omitempty"`
 	ImageVersion string                   `json:"imageVersion,omitempty"`
+	Expose       bool                     `json:"expose,omitempty"`
 	MountHome    bool                     `json:"mountHome,omitempty"`
 	MountEtcs    bool                     `json:"mountEtcs,omitempty"`
 	ConfigFiles  []AppComponentConfigFile `json:"configFiles,omitempty"`

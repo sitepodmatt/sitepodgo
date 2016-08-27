@@ -196,6 +196,10 @@ func (c *AppCompController) ProcessUpdate(key string) error {
 		deployment.Spec.Template.Spec.Containers[destIdx] = *destContainer
 	}
 
+	if ac.Spec.Expose {
+
+	}
+
 	c.Client.Deployments().Update(deployment)
 
 	return nil

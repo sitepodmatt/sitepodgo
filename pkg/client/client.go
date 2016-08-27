@@ -118,6 +118,12 @@ func (c *Client) PodTasks() *PodTaskClient {
 	}).(*PodTaskClient)
 }
 
+func (c *Client) Services() *ServiceClient {
+	return c.usingCache("servicesc", func() interface{} {
+		return NewServiceClient(c.k8sCoreRestClient, c.k8sCoreRestClientConfig, c.config.Namespace)
+	}).(*ServiceClient)
+}
+
 func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) (*restclient.RESTClient, *restclient.Config) {
 
 	rcConfig := &restclient.Config{
@@ -159,3 +165,5 @@ func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) (
 //go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" AppCompClient(v1.Appcomponent,v1.AppcomponentList,"AppComponent","AppComponents",true,"sitepod-appcomp-")
 
 //go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PodTaskClient(v1.Podtask,v1.PodtaskList,"PodTask","PodTasks",true,"sitepod-podtask-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ServiceClient(k8s_api.Service,k8s_api.ServiceList,"Service","Services",true,"sitepod-service-")
