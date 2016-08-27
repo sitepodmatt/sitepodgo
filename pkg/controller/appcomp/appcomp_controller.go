@@ -197,6 +197,35 @@ func (c *AppCompController) ProcessUpdate(key string) error {
 	}
 
 	if ac.Spec.Expose {
+		service, exists := c.Client.Services().MaybeSingleBySitepodKey(sitepodKey)
+		if !exists {
+			service = c.Client.Services().NewEmpty()
+			service.Spec.Selector = make(map[string]string)
+		}
+		service.Spec.Selector["sitepod"] = sitepodKey
+		service.Labels["sitepod"] = sitepodKey
+
+		service.Spec.Ports = []k8s_api.ServicePort{
+			k8s_api.ServicePort{
+				Protocol: k8s_api.ProtocolTCP,
+				Port:     ac.Spec.ExposePort,
+			},
+		}
+
+		//Presume cluster exists
+		cluster := c.Client.Clusters().GetByKey("sitepod-alpha")
+
+		if cluster.Spec.UseLoadBalancer {
+			service.Spec.Type = k8s_api.ServiceTypeLoadBalancer
+		} else {
+			if ac.Spec.ExposeExternally {
+				service.Spec.Type = k8s_api.ServiceTypeNodePort
+			} else {
+				service.Spec.Type = k8s_api.ServiceTypeClusterIP
+			}
+		}
+
+		c.Client.Services().UpdateOrAdd(service)
 
 	}
 

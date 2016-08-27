@@ -20,9 +20,10 @@ func (c *Cluster) SetDefaults() {
 }
 
 type ClusterSpec struct {
-	DisplayName  string `json:"displayName,omitempty"`
-	Description  string `json:"description,omitempty"`
-	FileUIDCount int    `json:"fileUidCount"`
+	DisplayName     string `json:"displayName,omitempty"`
+	Description     string `json:"description,omitempty"`
+	FileUIDCount    int    `json:"fileUidCount"`
+	UseLoadBalancer bool   `json:"useLoadBalancer"`
 }
 
 func (s *Cluster) NextFileUID() int {
