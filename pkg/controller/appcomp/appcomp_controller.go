@@ -1,4 +1,4 @@
-package services
+package appcomp
 
 // Listen for new app components and build deployments when the sitepod is ready with a root deployment and PV
 

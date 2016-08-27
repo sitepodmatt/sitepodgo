@@ -4,9 +4,9 @@ import (
 	"github.com/golang/glog"
 
 	"sitepod.io/sitepod/pkg/client"
+	"sitepod.io/sitepod/pkg/controller/appcomp"
 	"sitepod.io/sitepod/pkg/controller/etc"
 	"sitepod.io/sitepod/pkg/controller/podtask"
-	"sitepod.io/sitepod/pkg/controller/services"
 	"sitepod.io/sitepod/pkg/controller/sitepod"
 	"sitepod.io/sitepod/pkg/controller/systemuser"
 
@@ -50,7 +50,7 @@ func (s *SimpleSystem) Run(stopCh <-chan struct{}) {
 	etcController := etc.NewEtcController(cc)
 	go etcController.Run(stopCh)
 
-	appCompController := services.NewAppCompController(cc)
+	appCompController := appcomp.NewAppCompController(cc)
 	go appCompController.Run(stopCh)
 
 	sitepodController := sitepod.NewSitepodController(cc)
