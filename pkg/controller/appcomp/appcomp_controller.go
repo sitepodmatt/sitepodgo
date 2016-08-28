@@ -79,14 +79,17 @@ func (c *AppCompController) ProcessUpdate(key string) error {
 	}
 
 	specGenKey := ac.Annotations[SpecGenAnnontationKey]
-	if specGenKey == "ssh-server" {
-		glog.Infof("Applying spec generation of %s to app comp %s,", specGenKey, ac.Name)
-		specgen.SpecGenSSHServer(ac)
-		delete(ac.Annotations, SpecGenAnnontationKey)
-		// This will requeue the processing with a spec generated in place
-		c.Client.AppComps().Update(ac)
-		glog.Infof("Updated app comp %s with spec gen", ac.Name)
-		return nil
+	if len(specGenKey) > 0 {
+		specGenFn := specgen.Lookup(specGenKey)
+		if specGenFn != nil {
+			glog.Infof("Applying spec generation of %s to app comp %s,", specGenKey, ac.Name)
+			delete(ac.Annotations, SpecGenAnnontationKey)
+			specGenFn(ac)
+			// This will requeue the processing with a spec generated in place
+			c.Client.AppComps().Update(ac)
+			glog.Infof("Updated app comp %s with spec gen", ac.Name)
+			return nil
+		}
 	}
 
 	var destContainer *k8s_api.Container
