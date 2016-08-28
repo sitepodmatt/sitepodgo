@@ -164,7 +164,7 @@ func (c *ClusterClient) GetByKey(key string) *v1.Cluster {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "Cluster" + ": " + key)
 	}
 
 	return item

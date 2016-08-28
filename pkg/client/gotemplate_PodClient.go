@@ -164,7 +164,7 @@ func (c *PodClient) GetByKey(key string) *k8s_api.Pod {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "Pod" + ": " + key)
 	}
 
 	return item

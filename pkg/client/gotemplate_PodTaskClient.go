@@ -164,7 +164,7 @@ func (c *PodTaskClient) GetByKey(key string) *v1.Podtask {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "PodTask" + ": " + key)
 	}
 
 	return item

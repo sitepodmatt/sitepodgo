@@ -164,7 +164,7 @@ func (c *ReplicaSetClient) GetByKey(key string) *ext_api.ReplicaSet {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "ReplicaSet" + ": " + key)
 	}
 
 	return item

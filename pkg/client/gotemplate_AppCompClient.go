@@ -164,7 +164,7 @@ func (c *AppCompClient) GetByKey(key string) *v1.Appcomponent {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "AppComponent" + ": " + key)
 	}
 
 	return item

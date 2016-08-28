@@ -164,7 +164,7 @@ func (c *ConfigMapClient) GetByKey(key string) *k8s_api.ConfigMap {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "ConfigMap" + ": " + key)
 	}
 
 	return item

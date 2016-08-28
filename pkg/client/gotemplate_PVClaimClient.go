@@ -164,7 +164,7 @@ func (c *PVClaimClient) GetByKey(key string) *k8s_api.PersistentVolumeClaim {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "PersistentVolumeClaim" + ": " + key)
 	}
 
 	return item

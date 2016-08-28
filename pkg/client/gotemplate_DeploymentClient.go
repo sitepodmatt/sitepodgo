@@ -164,7 +164,7 @@ func (c *DeploymentClient) GetByKey(key string) *ext_api.Deployment {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "Deployment" + ": " + key)
 	}
 
 	return item

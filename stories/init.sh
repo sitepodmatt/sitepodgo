@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# use https://github.com/bronze1man/yaml2json and not to shower of shit of yaml/json convert that dont conform in nodejs space
+
 URL="http://localhost:9080"
 
 curlit() {
@@ -11,7 +13,7 @@ post() {
 }
 
 echo "Creating sitepod"
-SITEPOD_OUTPUT=$(post <(yaml2json new-sitepod.yaml) "/apis/stable.sitepod.io/v1/namespaces/default/sitepods")
+SITEPOD_OUTPUT=$(post <(cat new-sitepod.yaml | yaml2json) "/apis/stable.sitepod.io/v1/namespaces/default/sitepods")
 echo $SITEPOD_OUTPUT
 
 
@@ -27,7 +29,7 @@ echo -e "$SITEPOD_UID"
 
 tempfile=$(mktemp)
 echo -e  'y\n'| ssh-keygen -t rsa -f "$tempfile" -N ''
-yaml2json new-ssh-service.yaml > new-ssh-service.json
+(cat new-ssh-service.yaml | yaml2json) > new-ssh-service.json
 #$ splice this into 
 jsontempfile=$(mktemp)
 { jq ".spec.sshHostKey = \"$(cat $tempfile)\" | .metadata.labels.sitepod = $SITEPOD_UID" new-ssh-service.json > "$jsontempfile" ; } && mv "$jsontempfile" new-ssh-service.json
@@ -39,7 +41,7 @@ post new-ssh-service.json "/apis/stable.sitepod.io/v1/namespaces/default/appcomp
 #exit
 
 
-yaml2json new-system-user.yaml > new-system-user.json
+(cat new-system-user.yaml | yaml2json) > new-system-user.json
 jsontempfile=$(mktemp)
 { jq ".spec.sshHostKey = \"$(cat $tempfile)\" | .metadata.labels.sitepod = $SITEPOD_UID" new-system-user.json > "$jsontempfile" ; } && mv "$jsontempfile" new-system-user.json
 

@@ -164,7 +164,7 @@ func (c *ServiceClient) GetByKey(key string) *k8s_api.Service {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "Service" + ": " + key)
 	}
 
 	return item

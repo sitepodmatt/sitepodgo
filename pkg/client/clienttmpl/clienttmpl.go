@@ -173,7 +173,7 @@ func (c *ClientTmpl) GetByKey(key string) *ResourceType {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + ResourceName + ": " + key)
 	}
 
 	return item

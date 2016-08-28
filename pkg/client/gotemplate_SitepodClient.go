@@ -164,7 +164,7 @@ func (c *SitepodClient) GetByKey(key string) *v1.Sitepod {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "Sitepod" + ": " + key)
 	}
 
 	return item

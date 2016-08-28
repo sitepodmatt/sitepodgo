@@ -68,6 +68,7 @@ func (c *SystemUserController) ProcessUpdate(key string) error {
 		if !exists {
 			//TODO pass name
 			cluster = c.Client.Clusters().NewEmpty()
+			cluster.Name = "sitepod-alpha"
 		}
 
 		assignedFileUID := cluster.NextFileUID()

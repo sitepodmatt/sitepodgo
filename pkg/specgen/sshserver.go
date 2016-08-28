@@ -26,6 +26,9 @@ func SpecGenSSHServer(obj interface{}) error {
 	ac.Spec.ImageVersion = "latest"
 	ac.Spec.MountHome = true
 	ac.Spec.MountEtcs = true
+	ac.Spec.Expose = true
+	ac.Spec.ExposePort = 22
+	ac.Spec.ExposeExternally = true
 
 	privateKey, publicKey := genNewKeys()
 	privateKeyPemFile := v1.AppComponentConfigFile{

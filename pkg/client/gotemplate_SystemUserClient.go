@@ -164,7 +164,7 @@ func (c *SystemUserClient) GetByKey(key string) *v1.SystemUser {
 	item, exists := c.MaybeGetByKey(key)
 
 	if !exists {
-		panic("Not found")
+		panic("Not found " + "SystemUser" + ": " + key)
 	}
 
 	return item

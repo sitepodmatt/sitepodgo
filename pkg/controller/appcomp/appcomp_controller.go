@@ -9,6 +9,7 @@ import (
 	k8s_api "k8s.io/kubernetes/pkg/api"
 	k8s_ext "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/util/intstr"
 	"sitepod.io/sitepod/pkg/api/v1"
 	cc "sitepod.io/sitepod/pkg/client"
 	. "sitepod.io/sitepod/pkg/controller/shared"
@@ -26,7 +27,7 @@ const (
 func NewAppCompController(client *cc.Client) framework.ControllerInterface {
 
 	glog.Infof("Creating app component (appcomp) controller")
-	c := &AppCompController{*NewSimpleController("ServicesController",
+	c := &AppCompController{*NewSimpleController("AppCompController",
 		client, []Syncer{client.Sitepods(), client.ConfigMaps(), client.PVClaims(), client.PVs(), client.Deployments()}, nil, nil)}
 	c.SyncFunc = c.ProcessUpdate
 	//sc.DeleteFunc = sc.ProcessDelete
@@ -199,16 +200,25 @@ func (c *AppCompController) ProcessUpdate(key string) error {
 	if ac.Spec.Expose {
 		service, exists := c.Client.Services().MaybeSingleBySitepodKey(sitepodKey)
 		if !exists {
+			//TODO we should have to do this each time
 			service = c.Client.Services().NewEmpty()
+			service.Labels = make(map[string]string)
 			service.Spec.Selector = make(map[string]string)
 		}
 		service.Spec.Selector["sitepod"] = sitepodKey
 		service.Labels["sitepod"] = sitepodKey
 
+		// How are we going to handle unavilability of node ports?
+		mappedPort := ac.Spec.ExposePort
+		// if mappedPort < 1024 {
+		// mappedPort = 5000 + mappedPort
+		// }
+
 		service.Spec.Ports = []k8s_api.ServicePort{
 			k8s_api.ServicePort{
-				Protocol: k8s_api.ProtocolTCP,
-				Port:     ac.Spec.ExposePort,
+				Protocol:   k8s_api.ProtocolTCP,
+				Port:       mappedPort,
+				TargetPort: intstr.FromInt(int(ac.Spec.ExposePort)),
 			},
 		}
 
