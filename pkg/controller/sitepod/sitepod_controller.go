@@ -297,6 +297,10 @@ func (sc *SitepodController) ProcessDelete(key string) error {
 			Getter:  c.AppComps().BySitepodKeyFunc(),
 			Deleter: c.AppComps().DeleteFunc(),
 		},
+		{
+			Getter:  c.Services().BySitepodKeyFunc(),
+			Deleter: c.Services().DeleteFunc(),
+		},
 	}
 
 	for _, dep := range dependencies {
