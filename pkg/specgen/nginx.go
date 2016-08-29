@@ -14,6 +14,7 @@ func SpecGenNginxServer(obj interface{}) error {
 
 	ac.Spec.MountHome = true
 	ac.Spec.MountEtcs = true
+	ac.Spec.MountTemp = true
 
 	ac.Spec.Expose = true
 	ac.Spec.ExposePort = 80
