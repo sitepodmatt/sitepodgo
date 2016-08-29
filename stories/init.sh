@@ -37,6 +37,13 @@ jsontempfile=$(mktemp)
 echo "Create user ssh service"
 post new-ssh-service.json "/apis/stable.sitepod.io/v1/namespaces/default/appcomponents"
 
+echo "Create nginx webserver service"
+(cat new-nginx-service.yaml | yaml2json) > new-nginx-service.json
+jsontempfile=$(mktemp)
+{ jq ".metadata.labels.sitepod = $SITEPOD_UID" new-nginx-service.json > "$jsontempfile" ; } && mv "$jsontempfile" new-nginx-service.json
+
+post new-nginx-service.json "/apis/stable.sitepod.io/v1/namespaces/default/appcomponents"
+
 #cat new-ssh-service.json
 #exit
 
