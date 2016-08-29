@@ -124,6 +124,12 @@ func (c *Client) Services() *ServiceClient {
 	}).(*ServiceClient)
 }
 
+func (c *Client) Websites() *WebsiteClient {
+	return c.usingCache("websites", func() interface{} {
+		return NewServiceClient(c.sitepodRestClient, c.sitepodRestClientConfig, c.config.Namespace)
+	}).(*WebsiteClient)
+}
+
 func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) (*restclient.RESTClient, *restclient.Config) {
 
 	rcConfig := &restclient.Config{
@@ -167,3 +173,5 @@ func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) (
 //go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" PodTaskClient(v1.Podtask,v1.PodtaskList,"PodTask","PodTasks",true,"sitepod-podtask-")
 
 //go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ServiceClient(k8s_api.Service,k8s_api.ServiceList,"Service","Services",true,"sitepod-service-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" WebsiteClient(v1.Website,v1.WebsiteList,"Website","Websites",true,"sitepod-website-")

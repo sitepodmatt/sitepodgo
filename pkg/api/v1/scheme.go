@@ -41,6 +41,11 @@ func AddToScheme(s *runtime.Scheme) (string, *unversioned.GroupVersion, *unversi
 	s.AddKnownTypes(internalGV, &ClusterList{})
 	s.AddKnownTypes(externalGV, &ClusterList{})
 
+	s.AddKnownTypes(internalGV, &Website{})
+	s.AddKnownTypes(externalGV, &Website{})
+	s.AddKnownTypes(internalGV, &WebsiteList{})
+	s.AddKnownTypes(externalGV, &WebsiteList{})
+
 	s.AddKnownTypes(internalGV, &Podtask{})
 	s.AddKnownTypes(externalGV, &Podtask{})
 	s.AddKnownTypes(internalGV, &PodtaskList{})
