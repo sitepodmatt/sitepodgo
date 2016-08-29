@@ -27,14 +27,15 @@ type AppComponentConfigFile struct {
 }
 
 type AppComponentSpec struct {
-	Type             string `json:"type,omitempty"`
-	DisplayName      string `json:"displayName,omitempty"`
-	Description      string `json:"description,omitempty"`
-	Image            string `json:"image,omitempty"`
-	ImageVersion     string `json:"imageVersion,omitempty"`
-	Expose           bool   `json:"expose,omitempty"`
-	ExposePort       int32  `json:"exposePort,omitempty"`
-	ExposeExternally bool
+	Type             string                   `json:"type,omitempty"`
+	DisplayName      string                   `json:"displayName,omitempty"`
+	Description      string                   `json:"description,omitempty"`
+	Image            string                   `json:"image,omitempty"`
+	ImageVersion     string                   `json:"imageVersion,omitempty"`
+	Expose           bool                     `json:"expose,omitempty"`
+	ExposePort       int32                    `json:"exposePort,omitempty"`
+	ExposeExternally bool                     `json:"expostExternally,omitempty"`
+	MountTemp        bool                     `json:"mountTemp,omitempty"`
 	MountHome        bool                     `json:"mountHome,omitempty"`
 	MountEtcs        bool                     `json:"mountEtcs,omitempty"`
 	ConfigFiles      []AppComponentConfigFile `json:"configFiles,omitempty"`

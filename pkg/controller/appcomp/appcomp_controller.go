@@ -173,6 +173,44 @@ func (c *AppCompController) ProcessUpdate(key string) error {
 		}
 	}
 
+	if ac.Spec.MountTemp {
+
+		tempVmExists := false
+		for _, vm := range destContainer.VolumeMounts {
+			if vm.Name == "temp-storage" {
+				tempVmExists = true
+				break
+			}
+		}
+
+		if !tempVmExists {
+			destContainer.VolumeMounts = append(destContainer.VolumeMounts,
+				k8s_api.VolumeMount{
+					Name:      "temp-storage",
+					MountPath: "/tmp",
+				})
+		}
+
+		tempVolumeExists := false
+		for _, dv := range deployment.Spec.Template.Spec.Volumes {
+			if dv.Name == "temp-storage" {
+				tempVolumeExists = true
+				break
+			}
+		}
+
+		if !tempVolumeExists {
+			deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, k8s_api.Volume{
+				Name: "temp-storage",
+				VolumeSource: k8s_api.VolumeSource{
+					EmptyDir: &k8s_api.EmptyDirVolumeSource{
+						Medium: k8s_api.StorageMediumMemory,
+					},
+				},
+			})
+		}
+	}
+
 	if ac.Spec.MountHome {
 
 		homeVmExists := false
