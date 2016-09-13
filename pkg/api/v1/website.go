@@ -18,6 +18,10 @@ func (c *Website) SetDefaults() {
 	c.ObjectMeta.Annotations = make(map[string]string)
 }
 
+func (c *Website) GetPrimaryDomain() string {
+	return ""
+}
+
 type WebsiteSpec struct {
 	Name string `json:",inline"`
 }
@@ -27,7 +31,12 @@ func (s *Website) GetObjectMeta() meta.Object {
 	return &om
 }
 
-type WebsiteStatus struct{}
+type WebsiteStatus struct {
+	DirectoryCreated  bool
+	SkeltonSetup      bool
+	ServerSetup       bool
+	LoadBalancerSetup bool
+}
 
 func (s *Website) GetObjectKind() unversioned.ObjectKind {
 	return &s.TypeMeta

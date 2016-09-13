@@ -1,0 +1,22 @@
+
+Websites
+
+Website is a resource
+
+Nginx app component handles websites, but a PHP-FPM process might also be required
+
+Config controller writes file Set Generated true
+
+Adding a website has several tasks
+###
+
+- Validate uniqueness of domain
+- Create directory
+- Pull initial directory skel homepage
+- Add nginx entry
+- Setup domain on load balancer?
+
+
+PodTask controller Updates Deployed
+
+
