@@ -55,6 +55,9 @@ jsontempfile=$(mktemp)
 echo "Creating systemuser-matt"
 post new-system-user.json "/apis/stable.sitepod.io/v1/namespaces/default/systemusers"
 
-#echo "Create user ssh service"
-#post <(yaml2json new-ssh-service.yaml) "/apis/stable.sitepod.io/v1/namespaces/default/serviceinstances"
+echo "Create new website"
+jsontempfile=$(mktemp)
+(cat new-website.yaml | yaml2json) > new-website.json
+{ jq ".metadata.labels.sitepod = $SITEPOD_UID" new-website.json > "$jsontempfile" ; } && mv "$jsontempfile" new-website.json
+post new-website.json "/apis/stable.sitepod.io/v1/namespaces/default/websites"
 

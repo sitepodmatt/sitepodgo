@@ -181,7 +181,7 @@ func (sc *SitepodController) ProcessUpdate(key string) error {
 			k8s_api.Container{
 				VolumeMounts: vms,
 				Name:         "sitepod-manager",
-				Image:        "alpine:3.1",
+				Image:        "sitepod/sitepod-manager:latest",
 				Command:      []string{"/usr/bin/tail", "-f", "/dev/null"},
 			})
 
@@ -231,8 +231,7 @@ func (sc *SitepodController) ProcessUpdate(key string) error {
 
 		podTasks := c.PodTasks().ByIndexByKey("sitepod", sitepodKey)
 
-		//TODO figure out how to make this configurable
-		cmd := []string{"/bin/mkdir", "-p", "/home"}
+		cmd := []string{"/setup-sitepod"}
 
 		podTaskExists := false
 		for _, podTask := range podTasks {

@@ -19,11 +19,12 @@ func (c *Website) SetDefaults() {
 }
 
 func (c *Website) GetPrimaryDomain() string {
-	return ""
+	return c.Spec.Domain
 }
 
 type WebsiteSpec struct {
-	Name string `json:",inline"`
+	Name   string `json:"name,omitempty"`
+	Domain string `json:"domain,omitempty"`
 }
 
 func (s *Website) GetObjectMeta() meta.Object {
@@ -32,10 +33,10 @@ func (s *Website) GetObjectMeta() meta.Object {
 }
 
 type WebsiteStatus struct {
-	DirectoryCreated  bool
-	SkeltonSetup      bool
-	ServerSetup       bool
-	LoadBalancerSetup bool
+	DirectoryCreated  bool `json:"directoryCreated,omitempty"`
+	SkeltonSetup      bool `json:"skeltonSetup,omitempty"`
+	ServerSetup       bool `json:"serverSetup,omitempty"`
+	LoadBalancerSetup bool `json:"loadBalancerSetup,omitempty"`
 }
 
 func (s *Website) GetObjectKind() unversioned.ObjectKind {

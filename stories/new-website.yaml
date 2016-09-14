@@ -1,0 +1,8 @@
+kind: Website
+apiVersion: stable.sitepod.io/v1
+metadata:
+  generateName: sitepod-website-
+  labels:
+    sitepod: "fdf5af43-4053-11e6-8410-98eecb292b22"
+spec:
+  domain: "acmecorp.com"

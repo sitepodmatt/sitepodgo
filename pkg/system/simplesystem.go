@@ -78,6 +78,7 @@ func (s *SimpleSystem) Run(stopCh <-chan struct{}) {
 	go cc.ConfigMaps().StartInformer(stopCh)
 	go cc.Clusters().StartInformer(stopCh)
 	go cc.AppComps().StartInformer(stopCh)
+	go cc.Websites().StartInformer(stopCh)
 	glog.Infof("Started informers")
 	glog.Info("Started simple system")
 	<-stopCh

@@ -38,9 +38,7 @@ func (c *WebsiteController) Run(stopCh <-chan struct{}) {
 }
 
 func (c *WebsiteController) QueueAdd(item interface{}) {
-	accessor, _ := meta.Accessor(item)
-	key := string(accessor.GetUID())
-	c.EnqueueUpdate(key)
+	c.EnqueueUpdate(c.Client.Websites().KeyOf(item))
 }
 
 func (c *WebsiteController) QueueUpdate(old interface{}, cur interface{}) {
@@ -48,6 +46,7 @@ func (c *WebsiteController) QueueUpdate(old interface{}, cur interface{}) {
 }
 
 func (c *WebsiteController) QueueDelete(deleted interface{}) {
+	c.EnqueueDelete(c.Client.Websites().KeyOf(deleted))
 	accessor, err := meta.Accessor(deleted)
 	if err == nil {
 		key := string(accessor.GetUID())
@@ -59,7 +58,12 @@ func (c *WebsiteController) ProcessUpdate(key string) error {
 
 	glog.Infof("Processing website %s", key)
 
-	website := c.Client.Websites().GetByKey(key)
+	website, exists := c.Client.Websites().MaybeGetByKey(key)
+
+	if !exists {
+		glog.Infof("Website %s no longer exists", key)
+		return nil
+	}
 
 	alreadySetup := false
 	var err error
@@ -81,7 +85,7 @@ func (c *WebsiteController) ProcessUpdate(key string) error {
 	}
 
 	if !alreadySetup {
-		c.Client.Websites().Update(website)
+		//c.Client.Websites().Update(website)
 	} else {
 		glog.Infof("No setup required for website %s", key)
 	}
@@ -98,16 +102,14 @@ func (c *WebsiteController) CreateDirectory(website *v1.Website) error {
 	cmd := []string{"/bin/mkdir" /* "-p", */, "/home/sitepod/websites/" + website.GetPrimaryDomain()}
 
 	podTaskExists := false
+	podTaskExistingPod := ""
 	for _, podTask := range podTasks {
 		if reflect.DeepEqual(podTask.Spec.Command, cmd) {
 			podTaskExists = true
+			podTaskExistingPod = podTask.Name
 			glog.Infof("Existing podtask for found")
 			break
 		}
-	}
-
-	if podTaskExists {
-		return nil
 	}
 
 	pod, exists := c.Client.Pods().MaybeSingleBySitepodKey(sitepodKey)
@@ -115,8 +117,13 @@ func (c *WebsiteController) CreateDirectory(website *v1.Website) error {
 		return ConditionsNotReady{"Still provisioning pod"}
 	}
 
+	if podTaskExists && (podTaskExistingPod == pod.Name) {
+		return nil
+	}
+
 	readyExists, _ := From(pod.Status.Conditions).Where(func(s T) (bool, error) {
-		return s.(k8s_api.PodCondition).Type == k8s_api.PodReady &&
+		return (s.(k8s_api.PodCondition).Type == k8s_api.PodReady ||
+			s.(k8s_api.PodCondition).Type == k8s_api.PodRunning) &&
 			s.(k8s_api.PodCondition).Status == k8s_api.ConditionTrue, nil
 	}).Any()
 
