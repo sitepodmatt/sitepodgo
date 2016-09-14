@@ -21,14 +21,14 @@ type WebsiteController struct {
 
 func NewWebsiteController(client *cc.Client) framework.ControllerInterface {
 
-	glog.Infof("Creating config controller")
-	sc := &WebsiteController{*NewSimpleController("ConfigController", client, []Syncer{client.SystemUsers(),
-		client.ConfigMaps(), client.Sitepods()}, nil, nil)}
+	glog.Infof("Creating website controller")
+	sc := &WebsiteController{*NewSimpleController("WebsiteController", client,
+		[]Syncer{client.ConfigMaps(), client.Sitepods()}, nil, nil)}
 	sc.SyncFunc = sc.ProcessUpdate
-	client.SystemUsers().AddInformerHandlers(framework.ResourceEventHandlerFuncs{
-	//AddFunc:    sc.QueueAdd,
-	//UpdateFunc: sc.QueueUpdate,
-	//DeleteFunc: sc.QueueDelete,
+	client.Websites().AddInformerHandlers(framework.ResourceEventHandlerFuncs{
+		AddFunc:    sc.QueueAdd,
+		UpdateFunc: sc.QueueUpdate,
+		//DeleteFunc: sc.QueueDelete,
 	})
 	return sc
 }
@@ -48,16 +48,11 @@ func (c *WebsiteController) QueueUpdate(old interface{}, cur interface{}) {
 }
 
 func (c *WebsiteController) QueueDelete(deleted interface{}) {
-	accessor, _ := meta.Accessor(deleted)
-	key := string(accessor.GetUID()) + ":" + accessor.GetLabels()["sitepod"]
-	c.EnqueueDelete(key)
-}
-
-var steps = []string{
-	"Create Directory",
-	"Pull Skel Dir",
-	"Make nginx entry",
-	"Add load balancer entry",
+	accessor, err := meta.Accessor(deleted)
+	if err == nil {
+		key := string(accessor.GetUID())
+		c.EnqueueDelete(key)
+	}
 }
 
 func (c *WebsiteController) ProcessUpdate(key string) error {
@@ -74,8 +69,8 @@ func (c *WebsiteController) ProcessUpdate(key string) error {
 		err = c.SkeltonSetup(website)
 	} else if !website.Status.ServerSetup {
 		err = c.ServerSetup(website)
-	} else if !website.Status.LoadBalancerSetup {
-		err = c.LoadBalancerSetup(website)
+		//} else if !website.Status.LoadBalancerSetup {
+		//err = c.LoadBalancerSetup(website)
 	} else {
 		alreadySetup = true
 	}
@@ -87,6 +82,8 @@ func (c *WebsiteController) ProcessUpdate(key string) error {
 
 	if !alreadySetup {
 		c.Client.Websites().Update(website)
+	} else {
+		glog.Infof("No setup required for website %s", key)
 	}
 
 	glog.Infof("Processed website %s", key)

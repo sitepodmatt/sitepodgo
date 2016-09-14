@@ -9,6 +9,7 @@ import (
 	"sitepod.io/sitepod/pkg/controller/podtask"
 	"sitepod.io/sitepod/pkg/controller/sitepod"
 	"sitepod.io/sitepod/pkg/controller/systemuser"
+	"sitepod.io/sitepod/pkg/controller/website"
 
 	"k8s.io/kubernetes/pkg/api"
 	k8s_v1 "k8s.io/kubernetes/pkg/api/v1"
@@ -61,6 +62,9 @@ func (s *SimpleSystem) Run(stopCh <-chan struct{}) {
 
 	podTaskController := podtask.NewPodTaskController(cc)
 	go podTaskController.Run(stopCh)
+
+	websiteController := website.NewWebsiteController(cc)
+	go websiteController.Run(stopCh)
 
 	glog.Infof("Starting informers")
 	go cc.Sitepods().StartInformer(stopCh)

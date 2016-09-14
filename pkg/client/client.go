@@ -126,7 +126,7 @@ func (c *Client) Services() *ServiceClient {
 
 func (c *Client) Websites() *WebsiteClient {
 	return c.usingCache("websites", func() interface{} {
-		return NewServiceClient(c.sitepodRestClient, c.sitepodRestClientConfig, c.config.Namespace)
+		return NewWebsiteClient(c.sitepodRestClient, c.sitepodRestClientConfig, c.config.Namespace)
 	}).(*WebsiteClient)
 }
 
