@@ -122,9 +122,8 @@ func (c *WebsiteController) CreateDirectory(website *v1.Website) error {
 	}
 
 	readyExists, _ := From(pod.Status.Conditions).Where(func(s T) (bool, error) {
-		return (s.(k8s_api.PodCondition).Type == k8s_api.PodReady ||
-			s.(k8s_api.PodCondition).Type == k8s_api.PodRunning) &&
-			s.(k8s_api.PodCondition).Status == k8s_api.ConditionTrue, nil
+		return (s.(k8s_api.PodCondition).Type == k8s_api.PodReady &&
+			s.(k8s_api.PodCondition).Status == k8s_api.ConditionTrue), nil
 	}).Any()
 
 	if !readyExists {
