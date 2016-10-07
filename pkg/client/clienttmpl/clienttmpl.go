@@ -246,7 +246,17 @@ func (c *ClientTmpl) MaybeSingleBySitepodKey(sitepodKey string) (*ResourceType, 
 
 }
 
+type BeforeAdder interface {
+	BeforeAdd()
+}
+
 func (c *ClientTmpl) Add(target *ResourceType) *ResourceType {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdder); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if Namespaced {

@@ -237,7 +237,17 @@ func (c *ClusterClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Cluster,
 
 }
 
+type BeforeAdderClusterClient interface {
+	BeforeAdd()
+}
+
 func (c *ClusterClient) Add(target *v1.Cluster) *v1.Cluster {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderClusterClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

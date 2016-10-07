@@ -237,7 +237,17 @@ func (c *SitepodClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Sitepod,
 
 }
 
+type BeforeAdderSitepodClient interface {
+	BeforeAdd()
+}
+
 func (c *SitepodClient) Add(target *v1.Sitepod) *v1.Sitepod {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderSitepodClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

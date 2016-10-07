@@ -237,7 +237,17 @@ func (c *WebsiteClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Website,
 
 }
 
+type BeforeAdderWebsiteClient interface {
+	BeforeAdd()
+}
+
 func (c *WebsiteClient) Add(target *v1.Website) *v1.Website {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderWebsiteClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

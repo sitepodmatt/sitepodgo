@@ -237,7 +237,17 @@ func (c *ReplicaSetClient) MaybeSingleBySitepodKey(sitepodKey string) (*ext_api.
 
 }
 
+type BeforeAdderReplicaSetClient interface {
+	BeforeAdd()
+}
+
 func (c *ReplicaSetClient) Add(target *ext_api.ReplicaSet) *ext_api.ReplicaSet {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderReplicaSetClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

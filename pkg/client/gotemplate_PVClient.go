@@ -237,7 +237,17 @@ func (c *PVClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.Persiste
 
 }
 
+type BeforeAdderPVClient interface {
+	BeforeAdd()
+}
+
 func (c *PVClient) Add(target *k8s_api.PersistentVolume) *k8s_api.PersistentVolume {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderPVClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if false {

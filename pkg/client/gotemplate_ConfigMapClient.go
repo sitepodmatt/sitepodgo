@@ -237,7 +237,17 @@ func (c *ConfigMapClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.C
 
 }
 
+type BeforeAdderConfigMapClient interface {
+	BeforeAdd()
+}
+
 func (c *ConfigMapClient) Add(target *k8s_api.ConfigMap) *k8s_api.ConfigMap {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderConfigMapClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

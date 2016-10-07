@@ -237,7 +237,17 @@ func (c *PodTaskClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Podtask,
 
 }
 
+type BeforeAdderPodTaskClient interface {
+	BeforeAdd()
+}
+
 func (c *PodTaskClient) Add(target *v1.Podtask) *v1.Podtask {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderPodTaskClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

@@ -237,7 +237,17 @@ func (c *PVClaimClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.Per
 
 }
 
+type BeforeAdderPVClaimClient interface {
+	BeforeAdd()
+}
+
 func (c *PVClaimClient) Add(target *k8s_api.PersistentVolumeClaim) *k8s_api.PersistentVolumeClaim {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderPVClaimClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

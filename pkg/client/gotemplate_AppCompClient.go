@@ -237,7 +237,17 @@ func (c *AppCompClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Appcompo
 
 }
 
+type BeforeAdderAppCompClient interface {
+	BeforeAdd()
+}
+
 func (c *AppCompClient) Add(target *v1.Appcomponent) *v1.Appcomponent {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderAppCompClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

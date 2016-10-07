@@ -8,4 +8,5 @@ kubectl -s=http://localhost:9080 create -f appcomponent.yaml
 kubectl -s=http://localhost:9080 create -f systemuser.yaml
 kubectl -s=http://localhost:9080 create -f podtask.yaml
 kubectl -s=http://localhost:9080 create -f website.yaml
+kubectl -s=http://localhost:9080 create -f sitepoduser.yaml
 

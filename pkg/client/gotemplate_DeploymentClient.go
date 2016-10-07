@@ -237,7 +237,17 @@ func (c *DeploymentClient) MaybeSingleBySitepodKey(sitepodKey string) (*ext_api.
 
 }
 
+type BeforeAdderDeploymentClient interface {
+	BeforeAdd()
+}
+
 func (c *DeploymentClient) Add(target *ext_api.Deployment) *ext_api.Deployment {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderDeploymentClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

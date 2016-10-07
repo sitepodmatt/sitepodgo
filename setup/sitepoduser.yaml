@@ -1,0 +1,7 @@
+metadata:
+  name: sitepod-user.stable.sitepod.io
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+description: "A resource to represent a real sitepod user"
+versions:
+- name: v1

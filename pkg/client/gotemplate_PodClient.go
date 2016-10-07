@@ -237,7 +237,17 @@ func (c *PodClient) MaybeSingleBySitepodKey(sitepodKey string) (*k8s_api.Pod, bo
 
 }
 
+type BeforeAdderPodClient interface {
+	BeforeAdd()
+}
+
 func (c *PodClient) Add(target *k8s_api.Pod) *k8s_api.Pod {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderPodClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

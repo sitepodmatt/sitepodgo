@@ -237,7 +237,17 @@ func (c *SystemUserClient) MaybeSingleBySitepodKey(sitepodKey string) (*v1.Syste
 
 }
 
+type BeforeAdderSystemUserClient interface {
+	BeforeAdd()
+}
+
 func (c *SystemUserClient) Add(target *v1.SystemUser) *v1.SystemUser {
+
+	var itarget interface{}
+	itarget = target
+	if subject, ok := itarget.(BeforeAdderSystemUserClient); ok {
+		subject.BeforeAdd()
+	}
 
 	rcReq := c.rc.Post()
 	if true {

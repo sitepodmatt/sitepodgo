@@ -130,6 +130,12 @@ func (c *Client) Websites() *WebsiteClient {
 	}).(*WebsiteClient)
 }
 
+func (c *Client) SitepodUsers() *SitepodUserClient {
+	return c.usingCache("sitepodusers", func() interface{} {
+		return NewSitepodUserClient(c.sitepodRestClient, c.sitepodRestClientConfig, c.config.Namespace)
+	}).(*SitepodUserClient)
+}
+
 func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) (*restclient.RESTClient, *restclient.Config) {
 
 	rcConfig := &restclient.Config{
@@ -175,3 +181,5 @@ func (c *Client) buildRestClient(apiPath string, gv *unversioned.GroupVersion) (
 //go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" ServiceClient(k8s_api.Service,k8s_api.ServiceList,"Service","Services",true,"sitepod-service-")
 
 //go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" WebsiteClient(v1.Website,v1.WebsiteList,"Website","Websites",true,"sitepod-website-")
+
+//go:generate gotemplate "sitepod.io/sitepod/pkg/client/clienttmpl" SitepodUserClient(v1.SitepodUser,v1.SitepodUserList,"SitepodUser","SitepodUsers",true,"sitepod-user-")
