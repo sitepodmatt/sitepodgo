@@ -5,17 +5,22 @@ import (
 )
 
 type SitepodSession struct {
-	LastSeen time.Time
+	LastSeen      *time.Time `json:"last_seen,omitempty"`
+	MaxAge        int        `json:"max_age,omitempty"`
+	Authenticated bool       `json:"authenticated?"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Action string `json:"action"`
+	Data   struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	} `json:"data"`
 }
 
 type APIError struct {
-	Reason  string
-	Message string
+	Reason  string `json:"reason"`
+	Message string `json:"message"`
 }
 
 func (e *APIError) Error() string {

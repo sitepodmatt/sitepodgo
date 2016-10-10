@@ -21,51 +21,64 @@ type WebApi struct {
 	sessionStore sessions.Store
 }
 
-var rootdir string = "/tmp"
-
 func NewWebApi(cc *client.Client) *WebApi {
 
 	inst := &WebApi{}
 	inst.container = restful.NewContainer()
-	inst.sessionStore = sessions.NewFilesystemStore("", []byte("session1"))
+
+	fileStore := sessions.NewFilesystemStore("", []byte("session1"))
+	//	fileStore.Options.Secure = true
+	fileStore.MaxAge(86400) //one day
+
+	inst.sessionStore = fileStore
+
 	inst.client = cc
 
 	ws := new(restful.WebService)
-	ws.Path("/auth").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
+	ws.Path("/api").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Route(ws.POST("/login").To(inst.Login))
-	ws.Route(ws.GET("/whoami").To(inst.WhoAmI))
+	ws.Route(ws.GET("/context").To(inst.WhoAmI))
 
-	//staticWs := new(restful.WebService)
-	//ws.Route("/").Produces(restful.MIMk
+	staticWs := new(restful.WebService)
+	staticWs.Route(ws.GET("/ui/{subpath:*}").To(staticFromPathParam))
 
 	gob.Register(&SitepodSession{})
 	inst.container.Add(ws)
+	inst.container.Add(staticWs)
 	return inst
 }
 
 func staticFromPathParam(req *restful.Request, resp *restful.Response) {
-	actual := path.Join(rootdir, req.PathParameter("subpath"))
-	fmt.Printf("serving %s ... (from %s)\n", actual, req.PathParameter("subpath"))
-	http.ServeFile(resp.ResponseWriter, req.Request, actual)
-	return
-}
 
-func staticFromQueryParam(req *restful.Request, resp *restful.Response) {
-	http.ServeFile(resp.ResponseWriter, req.Request, path.Join(rootdir, req.QueryParameter("resource")))
-}
+	subPath := req.Request.URL.Path[4:]
 
-func (i *WebApi) SessionFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	baseDir := "/home/matt/ws/sitepodfe/resources/public"
+	fmt.Println(subPath)
+	if strings.Index(subPath, "css/") == 0 || strings.Index(subPath, "js/") == 0 || strings.Index(subPath, "img/") == 0 {
+		actual := path.Join(baseDir, subPath)
+		if strings.Index(subPath, "js/") == 0 {
+			resp.Header().Set("Content-Type", "text/javascript; charset=UTF-8")
+		}
 
-	session, err := i.sessionStore.Get(req.Request, "sitepodfe")
-	if err != nil {
-		resp.WriteHeaderAndEntity(500, NewAPIError("No session"))
+		http.ServeFile(resp.ResponseWriter, req.Request, actual)
 		return
 	}
 
-	session.Values["lastSeen"] = time.Now()
-
-	chain.ProcessFilter(req, resp)
+	http.ServeFile(resp.ResponseWriter, req.Request, path.Join(baseDir, "index.html"))
 }
+
+//func (i *WebApi) SessionFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+
+//session, err := i.sessionStore.Get(req.Request, "sitepodfe")
+//if err != nil {
+//resp.WriteHeaderAndEntity(500, NewAPIError("No session"))
+//return
+//}
+
+//session.Values["lastSeen"] = &time.Now()
+
+//chain.ProcessFilter(req, resp)
+//}
 
 func (i *WebApi) Login(req *restful.Request, resp *restful.Response) {
 
@@ -77,23 +90,23 @@ func (i *WebApi) Login(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	entity.Email = strings.ToLower(strings.TrimSpace(entity.Email))
+	entity.Data.Email = strings.ToLower(strings.TrimSpace(entity.Data.Email))
 
-	if len(entity.Email) == 0 || len(entity.Password) == 0 {
+	if len(entity.Data.Email) == 0 || len(entity.Data.Password) == 0 {
 		resp.WriteHeaderAndEntity(400, NewAPIError("Username and password required"))
 		return
 	}
 
-	key := "sitepod-user-" + GetMD5Hash(entity.Email)
+	key := "sitepod-user-" + GetMD5Hash(entity.Data.Email)
 
 	user, exists := i.client.SitepodUsers().MaybeGetByKey(key)
 
 	if !exists {
-		resp.WriteHeaderAndEntity(404, NewAPIError("user not found: "+entity.Email))
+		resp.WriteHeaderAndEntity(404, NewAPIError("user not found: "+entity.Data.Email))
 		return
 	}
 
-	saltedPassword, err := Hash(entity.Password, user.Spec.Salt)
+	saltedPassword, err := Hash(entity.Data.Password, user.Spec.Salt)
 
 	if err != nil {
 		resp.WriteHeaderAndEntity(500, NewAPIError("user not found"))
@@ -101,14 +114,17 @@ func (i *WebApi) Login(req *restful.Request, resp *restful.Response) {
 	}
 
 	if saltedPassword != user.Spec.SaltedPassword {
-		resp.WriteHeaderAndEntity(403, struct{ Ok bool }{Ok: false})
+		resp.WriteHeaderAndEntity(403, NewAPIError("password incorrect"))
 		return
 	}
 
 	session, err := i.sessionStore.New(req.Request, "sitepodfe")
-	session.Values["sess"] = SitepodSession{time.Now()}
+	lastSeen := time.Now().UTC()
+	lastSeen = lastSeen.Round(time.Second)
+	sitepodSession := SitepodSession{&lastSeen, session.Options.MaxAge, true}
+	session.Values["sess"] = sitepodSession
 	session.Save(req.Request, resp.ResponseWriter)
-	resp.WriteHeaderAndEntity(200, struct{ Ok bool }{Ok: true})
+	resp.WriteHeaderAndEntity(200, sitepodSession)
 	return
 }
 
@@ -117,7 +133,7 @@ func (i *WebApi) WhoAmI(req *restful.Request, resp *restful.Response) {
 	session, _ := i.sessionStore.Get(req.Request, "sitepodfe")
 
 	if session.IsNew {
-		resp.WriteHeaderAndEntity(503, NewAPIError("not logged in"))
+		resp.WriteHeaderAndEntity(200, &SitepodSession{})
 		return
 	}
 
