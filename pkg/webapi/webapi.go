@@ -37,6 +37,7 @@ func NewWebApi(cc *client.Client) *WebApi {
 	ws := new(restful.WebService)
 	ws.Path("/api").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Route(ws.POST("/login").To(inst.Login))
+	ws.Route(ws.POST("/logout").To(inst.Logout))
 	ws.Route(ws.GET("/context").To(inst.WhoAmI))
 
 	staticWs := new(restful.WebService)
@@ -79,6 +80,16 @@ func staticFromPathParam(req *restful.Request, resp *restful.Response) {
 
 //chain.ProcessFilter(req, resp)
 //}
+
+func (i *WebApi) Logout(req *restful.Request, resp *restful.Response) {
+	session, _ := i.sessionStore.Get(req.Request, "sitepodfe")
+	if !session.IsNew {
+		delete(session.Values, "sess")
+		session.Options.MaxAge = -1
+	}
+	session.Save(req.Request, resp.ResponseWriter)
+	resp.WriteHeaderAndEntity(200, struct{}{})
+}
 
 func (i *WebApi) Login(req *restful.Request, resp *restful.Response) {
 
