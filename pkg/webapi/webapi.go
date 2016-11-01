@@ -93,6 +93,18 @@ func (i *WebApi) Logout(req *restful.Request, resp *restful.Response) {
 
 func (i *WebApi) Login(req *restful.Request, resp *restful.Response) {
 
+	session, _ := i.sessionStore.New(req.Request, "sitepodfe")
+	lastSeen := time.Now().UTC()
+	lastSeen = lastSeen.Round(time.Second)
+	sitepodSession := SitepodSession{&lastSeen, session.Options.MaxAge, true}
+	session.Values["sess"] = sitepodSession
+	session.Save(req.Request, resp.ResponseWriter)
+	resp.WriteHeaderAndEntity(200, sitepodSession)
+	return
+}
+
+func (i *WebApi) LoginX(req *restful.Request, resp *restful.Response) {
+
 	entity := &LoginRequest{}
 	err := req.ReadEntity(entity)
 
